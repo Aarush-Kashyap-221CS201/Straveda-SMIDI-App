@@ -26,6 +26,7 @@ export default function DashboardScreen({ navigation }) {
     inventoryValue: 0,
     totalTransactions: 0,
     totalRevenue: 0,
+    totalEmployees: 0,
     latestTransactions: [],
     chartData: {
       labels: [],
@@ -51,10 +52,16 @@ export default function DashboardScreen({ navigation }) {
     setLoading(true);
     try {
       const response = await api.get("/api/dashboard");
-      setData(prev => ({
-        ...prev,
-        ...response.data
-      }));
+      console.log("Dashboard API response:", response.data);
+      
+      if (response.data.success) {
+        setData(prev => ({
+          ...prev,
+          ...response.data.data
+        }));
+      } else {
+        console.warn("Dashboard API returned success: false");
+      }
     } catch (err) {
       console.warn("Dashboard error:", err.message || err);
     } finally {
@@ -65,35 +72,89 @@ export default function DashboardScreen({ navigation }) {
   async function fetchRecentTransactions() {
     try {
       const response = await api.get("/api/bills?page=1&limit=5");
-      const bills = response.data?.bills || response.data || [];
-      setData(prev => ({
-        ...prev,
-        latestTransactions: bills.slice(0, 5)
-      }));
+      console.log("Recent Transactions API response:", response.data);
+      
+      let bills = [];
+      
+      // Handle different API response structures
+      if (response.data && response.data.success && response.data.data) {
+        bills = response.data.data.bills || response.data.data || [];
+      } else if (response.data && response.data.bills) {
+        bills = response.data.bills;
+      } else if (response.data && Array.isArray(response.data)) {
+        bills = response.data;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        bills = response.data.data;
+      } else {
+        bills = response.data || [];
+      }
+      
+      console.log("Processed recent transactions:", bills);
+      
+      if (Array.isArray(bills)) {
+        setData(prev => ({
+          ...prev,
+          latestTransactions: bills.slice(0, 5)
+        }));
+      } else {
+        console.warn("Bills data is not an array:", bills);
+        setData(prev => ({
+          ...prev,
+          latestTransactions: []
+        }));
+      }
     } catch (err) {
       console.warn("Recent transactions error:", err.message);
+      setData(prev => ({
+        ...prev,
+        latestTransactions: []
+      }));
     }
   }
 
-  // NEW: Fetch real chart data from bills
   async function fetchChartData() {
     try {
-      // Get bills from the last 30 days to calculate weekly data
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const startDate = thirtyDaysAgo.toISOString().split('T')[0]; // YYYY-MM-DD format
+      const startDate = thirtyDaysAgo.toISOString().split('T')[0];
       
       const response = await api.get(`/api/bills?startDate=${startDate}&limit=100`);
-      const bills = response.data?.bills || response.data || [];
+      console.log("Chart Data API response:", response.data);
       
-      const weeklyData = generateWeeklyRevenueData(bills);
-      setData(prev => ({
-        ...prev,
-        chartData: weeklyData
-      }));
+      let bills = [];
+      
+      if (response.data && response.data.success && response.data.data) {
+        bills = response.data.data.bills || response.data.data || [];
+      } else if (response.data && response.data.bills) {
+        bills = response.data.bills;
+      } else if (response.data && Array.isArray(response.data)) {
+        bills = response.data;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        bills = response.data.data;
+      } else {
+        bills = response.data || [];
+      }
+      
+      console.log("Processed chart bills:", bills);
+      
+      if (Array.isArray(bills)) {
+        const weeklyData = generateWeeklyRevenueData(bills);
+        setData(prev => ({
+          ...prev,
+          chartData: weeklyData
+        }));
+      } else {
+        console.warn("Bills data for chart is not an array:", bills);
+        setData(prev => ({
+          ...prev,
+          chartData: {
+            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            datasets: [{ data: [0, 0, 0, 0, 0, 0, 0] }]
+          }
+        }));
+      }
     } catch (err) {
       console.warn("Chart data error:", err.message);
-      // Fallback to empty chart data
       setData(prev => ({
         ...prev,
         chartData: {
@@ -104,9 +165,13 @@ export default function DashboardScreen({ navigation }) {
     }
   }
 
-  // Generate weekly revenue data from bills
   const generateWeeklyRevenueData = (bills) => {
-    // Get last 7 days
+    if (!Array.isArray(bills)) {
+      bills = [];
+    }
+    
+    console.log("Generating chart from", bills.length, "bills");
+    
     const days = [];
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     
@@ -120,18 +185,22 @@ export default function DashboardScreen({ navigation }) {
       });
     }
 
-    // Calculate revenue for each day
+    console.log("Tracking days:", days);
+
     bills.forEach(bill => {
-      if (bill.createdAt) {
+      if (bill && bill.createdAt) {
         const billDate = new Date(bill.createdAt).toISOString().split('T')[0];
         const dayData = days.find(day => day.date === billDate);
         if (dayData) {
-          dayData.revenue += bill.totalAmount || bill.total || 0;
+          const amount = bill.finalAmount || bill.totalAmount || bill.total || bill.amount || bill.grandTotal || 0;
+          dayData.revenue += parseFloat(amount) || 0;
+          console.log(`Added revenue ${amount} for date ${billDate}`);
         }
       }
     });
 
-    // Prepare data for chart
+    console.log("Final daily revenues:", days.map(d => d.revenue));
+
     const labels = days.map(day => day.dayName);
     const revenueData = days.map(day => day.revenue);
 
@@ -143,11 +212,28 @@ export default function DashboardScreen({ navigation }) {
     };
   };
 
-  const StatCard = ({ title, value, icon, color, isCurrency = false }) => (
+  const getCustomerNames = (bill) => {
+    if (bill.customers && Array.isArray(bill.customers)) {
+      return bill.customers.map(customer => customer.customerName).join(', ');
+    }
+    return bill.customerName || "Walk-in Customer";
+  };
+
+  const getCustomerCount = (bill) => {
+    if (bill.customers && Array.isArray(bill.customers)) {
+      return bill.customers.length;
+    }
+    return 1;
+  };
+
+  const StatCard = ({ title, value, icon, color, isCurrency = false, subtitle }) => (
     <View style={[styles.statCard, { borderLeftColor: color }]}>
       <View style={styles.statHeader}>
         <Icon name={icon} size={24} color={color} />
-        <Text style={styles.statTitle}>{title}</Text>
+        <View style={styles.statTextContainer}>
+          <Text style={styles.statTitle}>{title}</Text>
+          {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
+        </View>
       </View>
       <Text style={styles.statValue}>
         {isCurrency ? '₹' : ''}{Number(value).toLocaleString()}
@@ -164,7 +250,6 @@ export default function DashboardScreen({ navigation }) {
     </TouchableOpacity>
   );
 
-  // Check if chart has any data to display
   const hasChartData = data.chartData?.datasets?.[0]?.data?.some(value => value > 0);
 
   return (
@@ -191,6 +276,36 @@ export default function DashboardScreen({ navigation }) {
         }
         showsVerticalScrollIndicator={false}
       >
+
+        <View style={styles.section}>
+          <View style={styles.quickActionsGrid}>
+            <QuickAction
+              title="Employees"
+              icon="account-group"
+              onPress={() => navigation.navigate("Employees")}
+              color="#f59e0b"
+            />
+            <QuickAction
+              title="Manage Products"
+              icon="package-variant"
+              onPress={() => navigation.navigate("Products")}
+              color="#3b82f6"
+            />
+            <QuickAction
+              title="Transactions"
+              icon="history"
+              onPress={() => navigation.navigate("Reports")}
+              color="#8b5cf6"
+            />
+            <QuickAction
+              title="Analytics"
+              icon="chart-bar"
+              onPress={() => navigation.navigate("Analytics")}
+              color="#22c55e"
+            />
+          </View>
+        </View>
+
         {/* === STATS GRID === */}
         <View style={styles.statsGrid}>
           <StatCard 
@@ -198,6 +313,7 @@ export default function DashboardScreen({ navigation }) {
             value={data.totalProducts} 
             icon="package-variant"
             color="#3b82f6"
+            subtitle="In inventory"
           />
           <StatCard 
             title="Inventory Value" 
@@ -205,12 +321,14 @@ export default function DashboardScreen({ navigation }) {
             icon="warehouse"
             color="#8b5cf6"
             isCurrency={true}
+            subtitle="Current stock"
           />
           <StatCard 
-            title="Transactions" 
-            value={data.totalTransactions} 
-            icon="receipt"
+            title="Employees" 
+            value={data.totalEmployees} 
+            icon="account-group"
             color="#f59e0b"
+            subtitle="Active staff"
           />
           <StatCard 
             title="Total Revenue" 
@@ -218,6 +336,7 @@ export default function DashboardScreen({ navigation }) {
             icon="cash-multiple"
             color="#10b981"
             isCurrency={true}
+            subtitle="All time"
           />
         </View>
 
@@ -228,7 +347,6 @@ export default function DashboardScreen({ navigation }) {
             <Text style={styles.chartSubtitle}>Last 7 days</Text>
           </View>
           
-          {/* Real Chart Data */}
           {hasChartData ? (
             <LineChart
               data={data.chartData}
@@ -268,61 +386,53 @@ export default function DashboardScreen({ navigation }) {
           )}
         </View>
 
-        {/* === QUICK ACTIONS === */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.quickActionsGrid}>
-            <QuickAction
-              title="Manage Products"
-              icon="package-variant"
-              onPress={() => navigation.navigate("Products")}
-              color="#3b82f6"
-            />
-            <QuickAction
-              title="Create Invoice"
-              icon="currency-inr"
-              onPress={() => navigation.navigate("Billing")}
-              color="#22c55e"
-            />
-            <QuickAction
-              title="Transactions"
-              icon="history"
-              onPress={() => navigation.navigate("Reports")}
-              color="#f59e0b"
-            />
-            <QuickAction
-              title="Analytics"
-              icon="chart-bar"
-              onPress={() => navigation.navigate("Analytics")}
-              color="#8b5cf6"
-            />
-          </View>
-        </View>
-
         {/* === RECENT TRANSACTIONS === */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Transactions</Text>
-            <TouchableOpacity onPress={() => navigation.navigate("Reports")}>
+            <TouchableOpacity 
+              style={styles.viewAllButton}
+              onPress={() => navigation.navigate("Reports")}
+            >
               <Text style={styles.viewAllText}>View All</Text>
+              <Icon name="chevron-right" size={16} color="#22c55e" />
             </TouchableOpacity>
           </View>
 
           {data.latestTransactions && data.latestTransactions.length > 0 ? (
             data.latestTransactions.map((transaction, index) => (
               <TouchableOpacity 
-                key={transaction._id || index} 
+                key={transaction._id || `transaction-${index}`} 
                 style={styles.transactionCard}
                 onPress={() => navigation.navigate("Reports")}
               >
-                <View style={styles.transactionLeft}>
+                <View style={styles.transactionIconContainer}>
                   <View style={[styles.transactionIcon, { backgroundColor: '#f0fdf4' }]}>
                     <Icon name="receipt" size={20} color="#22c55e" />
                   </View>
-                  <View style={styles.transactionInfo}>
-                    <Text style={styles.customerName}>
-                      {transaction.customerName || "Customer"}
+                </View>
+                
+                <View style={styles.transactionContent}>
+                  <View style={styles.transactionHeader}>
+                    <Text style={styles.employeeName} numberOfLines={1}>
+                      {transaction.employeeName || "Employee"}
                     </Text>
+                    <Text style={styles.transactionAmount}>
+                      ₹{Number(transaction.finalAmount || transaction.totalAmount || transaction.total || transaction.amount || 0).toLocaleString('en-IN')}
+                    </Text>
+                  </View>
+                  
+                  <Text style={styles.customerNames} numberOfLines={1}>
+                    {getCustomerNames(transaction)}
+                  </Text>
+                  
+                  <View style={styles.transactionFooter}>
+                    <View style={styles.customerCountBadge}>
+                      <Icon name="account-multiple" size={12} color="#6b7280" />
+                      <Text style={styles.customerCountText}>
+                        {getCustomerCount(transaction)} customer{getCustomerCount(transaction) !== 1 ? 's' : ''}
+                      </Text>
+                    </View>
                     <Text style={styles.transactionDate}>
                       {transaction.createdAt ? 
                         new Date(transaction.createdAt).toLocaleDateString('en-IN', {
@@ -335,11 +445,9 @@ export default function DashboardScreen({ navigation }) {
                     </Text>
                   </View>
                 </View>
-                <View style={styles.transactionRight}>
-                  <Text style={styles.transactionAmount}>
-                    ₹{Number(transaction.totalAmount || transaction.total || 0).toLocaleString('en-IN')}
-                  </Text>
-                  <Icon name="chevron-right" size={20} color="#9ca3af" />
+                
+                <View style={styles.chevronContainer}>
+                  <Icon name="chevron-right" size={20} color="#d1d5db" />
                 </View>
               </TouchableOpacity>
             ))
@@ -410,8 +518,12 @@ const styles = StyleSheet.create({
   },
   statHeader: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     marginBottom: 8,
+  },
+  statTextContainer: {
+    flex: 1,
+    marginLeft: 8,
   },
   statTitle: {
     fontSize: 12,
@@ -419,8 +531,12 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     textTransform: "uppercase",
     letterSpacing: 0.5,
-    marginLeft: 8,
     flex: 1,
+  },
+  statSubtitle: {
+    fontSize: 10,
+    color: "#9ca3af",
+    marginTop: 2,
   },
   statValue: {
     fontSize: 20,
@@ -453,9 +569,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6b7280",
   },
+  chartPlaceholderSubtext: {
+    fontSize: 12,
+    color: "#9ca3af",
+    marginTop: 4,
+  },
   section: {
     backgroundColor: "#ffffff",
     padding: 20,
+    marginTop: -5,
     borderRadius: 12,
     marginBottom: 16,
     shadowColor: "#000",
@@ -490,8 +612,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    marginTop: 8,
+    marginTop: -4,
     marginLeft: -8,
+    marginBottom: -14,
   },
   quickAction: {
     width: (width - 72) / 2,
@@ -517,57 +640,103 @@ const styles = StyleSheet.create({
     color: "#374151",
     textAlign: "center",
   },
+  viewAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "#f0fdf4",
+    borderRadius: 8,
+  },
   viewAllText: {
     color: "#22c55e",
     fontWeight: "600",
     fontSize: 14,
+    marginRight: 4,
   },
   transactionCard: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     padding: 16,
-    backgroundColor: "#f8fafc",
-    borderRadius: 8,
-    marginBottom: 8,
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#f1f5f9",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  transactionLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  transactionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
+  transactionIconContainer: {
     marginRight: 12,
   },
-  transactionInfo: {
+  transactionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#dcfce7",
+  },
+  transactionContent: {
     flex: 1,
   },
-  transactionRight: {
+  transactionHeader: {
     flexDirection: "row",
-    alignItems: "center",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 4,
   },
-  customerName: {
-    fontWeight: "600",
+  employeeName: {
+    fontWeight: "700",
     fontSize: 15,
     color: "#1f2937",
+    flex: 1,
+    marginRight: 8,
   },
   transactionAmount: {
     fontSize: 16,
     fontWeight: "700",
     color: "#22c55e",
-    marginRight: 8,
+  },
+  customerNames: {
+    fontSize: 14,
+    color: "#4b5563",
+    marginBottom: 6,
+    fontWeight: "500",
+  },
+  transactionFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  customerCountBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  customerCountText: {
+    fontSize: 11,
+    color: "#6b7280",
+    fontWeight: "500",
+    marginLeft: 4,
   },
   transactionDate: {
-    fontSize: 12,
-    color: "#6b7280",
-    marginTop: 2,
+    fontSize: 11,
+    color: "#9ca3af",
+    fontWeight: "500",
+  },
+  chevronContainer: {
+    marginLeft: 8,
   },
   emptyState: {
     alignItems: "center",
@@ -590,4 +759,3 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 });
-

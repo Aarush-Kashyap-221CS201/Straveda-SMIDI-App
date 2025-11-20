@@ -1,17 +1,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export const saveLoginSession = async () => {
-  const expiry = Date.now() + 3600 * 1000; // 1 hr
-  await AsyncStorage.setItem("loginExpiry", expiry.toString());
+  await AsyncStorage.setItem("loggedIn", "true");
 };
 
 export const isSessionValid = async () => {
-  const stored = await AsyncStorage.getItem("loginExpiry");
-  if (!stored) return false;
-
-  return Date.now() < parseInt(stored);
+  const loggedIn = await AsyncStorage.getItem("loggedIn");
+  return loggedIn === "true";
 };
 
 export const logout = async () => {
-  await AsyncStorage.removeItem("loginExpiry");
+  await AsyncStorage.removeItem("loggedIn");
 };

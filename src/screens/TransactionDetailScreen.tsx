@@ -25,7 +25,6 @@ export default function TransactionDetailScreen() {
     try {
       const pdfUrl = `${api.defaults.baseURL}/api/bills/${transaction._id}/pdf`;
       
-      // For web/demo - you can use Linking to open the PDF
       const supported = await Linking.canOpenURL(pdfUrl);
       
       if (supported) {
@@ -44,7 +43,7 @@ export default function TransactionDetailScreen() {
       const pdfUrl = `${api.defaults.baseURL}/api/bills/${transaction._id}/pdf`;
       
       await Share.share({
-        message: `Transaction Bill - ${transaction.customerName}`,
+        message: `Transaction Bill - ${transaction.billNumber}`,
         url: pdfUrl,
         title: 'Transaction Bill'
       });
@@ -53,37 +52,59 @@ export default function TransactionDetailScreen() {
     }
   };
 
+  // FIXED: Calculate totals for new structure with multiple customers
   const calculateItemsTotal = () => {
-    return transaction.items.reduce((sum, item) => sum + (item.itemAmount || 0), 0);
+    if (!transaction.customers || !Array.isArray(transaction.customers)) return 0;
+    
+    return transaction.customers.reduce((total, customer) => {
+      const customerItemsTotal = customer.items?.reduce((sum, item) => 
+        sum + (item.itemAmount || 0), 0) || 0;
+      return total + customerItemsTotal;
+    }, 0);
   };
 
   const calculateCommissionTotal = () => {
-    return transaction.items.reduce((sum, item) => sum + (item.commissionAmount || 0), 0);
+    if (!transaction.customers || !Array.isArray(transaction.customers)) return 0;
+    
+    return transaction.customers.reduce((total, customer) => {
+      const customerCommissionTotal = customer.items?.reduce((sum, item) => 
+        sum + (item.commissionAmount || 0), 0) || 0;
+      return total + customerCommissionTotal;
+    }, 0);
   };
 
   const getDiscountAmount = () => {
-    const itemsTotal = calculateItemsTotal();
-    const commissionTotal = calculateCommissionTotal();
-    return (itemsTotal + commissionTotal) * (transaction.discountPercent / 100);
+    return transaction.discountAmount || 0;
+  };
+
+  // Get total items count
+  const getTotalItemsCount = () => {
+    if (!transaction.customers || !Array.isArray(transaction.customers)) return 0;
+    
+    return transaction.customers.reduce((total, customer) => 
+      total + (customer.items?.length || 0), 0);
+  };
+
+  // Get employee name
+  const getEmployeeName = () => {
+    return transaction.employeeName || 
+           transaction.employeeId?.name || 
+           "Unknown Employee";
   };
 
   return (
     <View style={styles.container}>
-      <Header 
-        title="Transaction Details" 
-        showBackButton={true}
-        onBackPress={() => navigation.goBack()}
-      />
+     >
       
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {/* Header Card */}
         <View style={styles.headerCard}>
-          <View style={styles.customerHeader}>
+          <View style={styles.transactionHeader}>
             <View style={styles.avatar}>
-              <Icon name="account" size={32} color="#fff" />
+              <Icon name="receipt" size={32} color="#fff" />
             </View>
-            <View style={styles.customerInfo}>
-              <Text style={styles.customerName}>{transaction.customerName}</Text>
+            <View style={styles.transactionInfo}>
+              <Text style={styles.billNumber}>{transaction.billNumber}</Text>
               <Text style={styles.transactionDate}>
                 {moment(transaction.createdAt).format("DD MMM YYYY • hh:mm A")}
               </Text>
@@ -95,8 +116,24 @@ export default function TransactionDetailScreen() {
           </View>
           
           <View style={styles.amountSection}>
-            <Text style={styles.amount}>₹{Number(transaction.totalAmount).toLocaleString()}</Text>
-            <Text style={styles.amountLabel}>Total Amount</Text>
+            <Text style={styles.amount}>₹{Number(transaction.finalAmount || transaction.totalAmount).toLocaleString()}</Text>
+            <Text style={styles.amountLabel}>Final Amount</Text>
+          </View>
+        </View>
+
+        {/* Employee Information */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Employee Information</Text>
+          <View style={styles.employeeCard}>
+            <View style={styles.employeeAvatar}>
+              <Icon name="account-tie" size={24} color="#fff" />
+            </View>
+            <View style={styles.employeeInfo}>
+              <Text style={styles.employeeName}>{getEmployeeName()}</Text>
+              <Text style={styles.employeeId}>
+                ID: {transaction.employeeId?._id?.slice(-8) || "N/A"}
+              </Text>
+            </View>
           </View>
         </View>
 
@@ -118,9 +155,9 @@ export default function TransactionDetailScreen() {
           <Text style={styles.sectionTitle}>Transaction Summary</Text>
           <View style={styles.summaryGrid}>
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Bill ID</Text>
+              <Text style={styles.summaryLabel}>Bill Number</Text>
               <Text style={styles.summaryValue}>
-                {transaction._id.toString().slice(-8).toUpperCase()}
+                {transaction.billNumber || "N/A"}
               </Text>
             </View>
             <View style={styles.summaryItem}>
@@ -130,74 +167,98 @@ export default function TransactionDetailScreen() {
               </Text>
             </View>
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Items Count</Text>
+              <Text style={styles.summaryLabel}>Total Customers</Text>
               <Text style={styles.summaryValue}>
-                {transaction.items?.length || 0} items
+                {transaction.customers?.length || 0} customers
               </Text>
             </View>
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Discount</Text>
+              <Text style={styles.summaryLabel}>Total Items</Text>
               <Text style={styles.summaryValue}>
-                {transaction.discountPercent > 0 ? `${transaction.discountPercent}%` : "None"}
+                {getTotalItemsCount()} items
               </Text>
             </View>
+            
+            {transaction.notes && (
+              <View style={styles.summaryItemFull}>
+                <Text style={styles.summaryLabel}>Notes</Text>
+                <Text style={styles.summaryValue}>{transaction.notes}</Text>
+              </View>
+            )}
           </View>
         </View>
 
-        {/* Items List */}
+        {/* Customers & Items List */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Items Purchased</Text>
+            <Text style={styles.sectionTitle}>Customers & Items</Text>
             <Text style={styles.itemsCount}>
-              {transaction.items?.length || 0} items
+              {transaction.customers?.length || 0} customers
             </Text>
           </View>
           
-          <View style={styles.itemsList}>
-            {transaction.items?.map((item, index) => (
-              <View key={index} style={styles.itemCard}>
-                <View style={styles.itemHeader}>
-                  <Text style={styles.itemName}>{item.productName}</Text>
-                  <Text style={styles.itemTotal}>
-                    ₹{Number(item.lineTotal || item.itemAmount).toLocaleString()}
+          <View style={styles.customersList}>
+            {transaction.customers?.map((customer, customerIndex) => (
+              <View key={customerIndex} style={styles.customerCard}>
+                {/* Customer Header */}
+                <View style={styles.customerHeader}>
+                  <View style={styles.customerAvatar}>
+                    <Icon name="account" size={20} color="#fff" />
+                  </View>
+                  <Text style={styles.customerName}>{customer.customerName}</Text>
+                  <Text style={styles.customerSubtotal}>
+                    ₹{Number(customer.subtotal || 0).toLocaleString()}
                   </Text>
                 </View>
-                
-                <View style={styles.itemDetails}>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Quantity:</Text>
-                    <Text style={styles.detailValue}>{item.quantity}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Rate:</Text>
-                    <Text style={styles.detailValue}>₹{Number(item.rate).toLocaleString()}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Base Amount:</Text>
-                    <Text style={styles.detailValue}>₹{Number(item.itemAmount).toLocaleString()}</Text>
-                  </View>
-                  {item.commissionPercent > 0 && (
-                    <>
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Commission:</Text>
-                        <Text style={styles.detailValue}>{item.commissionPercent}%</Text>
-                      </View>
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>Commission Amount:</Text>
-                        <Text style={styles.detailValue}>
-                          ₹{Number(item.commissionAmount).toLocaleString()}
+
+                {/* Customer Items */}
+                <View style={styles.customerItems}>
+                  {customer.items?.map((item, itemIndex) => (
+                    <View key={itemIndex} style={styles.itemCard}>
+                      <View style={styles.itemHeader}>
+                        <Text style={styles.itemName}>{item.productName}</Text>
+                        <Text style={styles.itemTotal}>
+                          ₹{Number(item.lineTotal || item.itemAmount).toLocaleString()}
                         </Text>
                       </View>
-                    </>
-                  )}
-                  {item.dealerName && item.dealerName !== "N/A" && (
-                    <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Employee:</Text>
-                      <Text style={[styles.detailValue, styles.dealerValue]}>
-                        {item.dealerName}
-                      </Text>
+                      
+                      <View style={styles.itemDetails}>
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Quantity:</Text>
+                          <Text style={styles.detailValue}>{item.quantity}</Text>
+                        </View>
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Rate:</Text>
+                          <Text style={styles.detailValue}>₹{Number(item.rate).toLocaleString()}</Text>
+                        </View>
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Base Amount:</Text>
+                          <Text style={styles.detailValue}>₹{Number(item.itemAmount).toLocaleString()}</Text>
+                        </View>
+                        {item.commissionPercent > 0 && (
+                          <>
+                            <View style={styles.detailRow}>
+                              <Text style={styles.detailLabel}>Commission:</Text>
+                              <Text style={styles.detailValue}>{item.commissionPercent}%</Text>
+                            </View>
+                            <View style={styles.detailRow}>
+                              <Text style={styles.detailLabel}>Commission Amount:</Text>
+                              <Text style={styles.detailValue}>
+                                ₹{Number(item.commissionAmount).toLocaleString()}
+                              </Text>
+                            </View>
+                          </>
+                        )}
+                      </View>
                     </View>
-                  )}
+                  ))}
+                </View>
+
+                {/* Customer Summary */}
+                <View style={styles.customerSummary}>
+                  <Text style={styles.customerSummaryText}>
+                    {customer.items?.length || 0} items • ₹{Number(customer.subtotal || 0).toLocaleString()}
+                  </Text>
                 </View>
               </View>
             ))}
@@ -236,7 +297,7 @@ export default function TransactionDetailScreen() {
             <View style={[styles.priceRow, styles.totalRow]}>
               <Text style={styles.totalLabel}>Final Amount</Text>
               <Text style={styles.totalValue}>
-                ₹{Number(transaction.totalAmount).toLocaleString()}
+                ₹{Number(transaction.finalAmount || transaction.totalAmount).toLocaleString()}
               </Text>
             </View>
           </View>
@@ -258,7 +319,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f8fafc",
-    marginTop: 40,
   },
   scrollView: {
     flex: 1,
@@ -277,7 +337,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-start",
   },
-  customerHeader: {
+  transactionHeader: {
     flexDirection: "row",
     alignItems: "flex-start",
     flex: 1,
@@ -291,10 +351,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 16,
   },
-  customerInfo: {
+  transactionInfo: {
     flex: 1,
   },
-  customerName: {
+  billNumber: {
     fontSize: 20,
     fontWeight: "800",
     color: "#1f2937",
@@ -333,6 +393,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6b7280",
     fontWeight: "600",
+  },
+  // Employee Section
+  employeeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f8fafc",
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  employeeAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#f59e0b",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  employeeInfo: {
+    flex: 1,
+  },
+  employeeName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1f2937",
+    marginBottom: 2,
+  },
+  employeeId: {
+    fontSize: 12,
+    color: "#6b7280",
   },
   actionButtons: {
     flexDirection: "row",
@@ -415,6 +507,10 @@ const styles = StyleSheet.create({
     width: "50%",
     padding: 8,
   },
+  summaryItemFull: {
+    width: "100%",
+    padding: 8,
+  },
   summaryLabel: {
     fontSize: 12,
     color: "#6b7280",
@@ -426,36 +522,73 @@ const styles = StyleSheet.create({
     color: "#374151",
     fontWeight: "700",
   },
-  itemsList: {
-    gap: 12,
+  // Customers & Items Styles
+  customersList: {
+    gap: 16,
   },
-  itemCard: {
+  customerCard: {
     backgroundColor: "#f8fafc",
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#e5e7eb",
   },
+  customerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  customerAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#8b5cf6",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  customerName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1f2937",
+    flex: 1,
+  },
+  customerSubtotal: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#22c55e",
+  },
+  customerItems: {
+    gap: 12,
+    marginBottom: 12,
+  },
+  itemCard: {
+    backgroundColor: "#ffffff",
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
+  },
   itemHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 12,
+    marginBottom: 8,
   },
   itemName: {
-    fontSize: 16,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: "600",
     color: "#1f2937",
     flex: 1,
     marginRight: 12,
   },
   itemTotal: {
-    fontSize: 16,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "700",
     color: "#22c55e",
   },
   itemDetails: {
-    gap: 6,
+    gap: 4,
   },
   detailRow: {
     flexDirection: "row",
@@ -463,18 +596,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   detailLabel: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#6b7280",
     fontWeight: "500",
   },
   detailValue: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#374151",
     fontWeight: "600",
   },
-  dealerValue: {
-    color: "#f59e0b",
-    fontWeight: "700",
+  customerSummary: {
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
+  },
+  customerSummaryText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#6b7280",
+    textAlign: "center",
   },
   priceBreakdown: {
     gap: 12,

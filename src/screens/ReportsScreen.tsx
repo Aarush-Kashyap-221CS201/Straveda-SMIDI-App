@@ -28,8 +28,8 @@ export default function ReportsScreen() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [customer, setCustomer] = useState("");
-  const [dealer, setDealer] = useState("");
-  const [bills, setBills] = useState([]);
+  const [employee, setEmployee] = useState("");
+  const [transactions, setTransactions] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -46,129 +46,153 @@ export default function ReportsScreen() {
   const [tempStartDate, setTempStartDate] = useState(new Date());
   const [tempEndDate, setTempEndDate] = useState(new Date());
 
-  // Dealer dropdown states
+  // Employee dropdown states
+  const [employees, setEmployees] = useState([]);
+  const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
+  const [employeeSearch, setEmployeeSearch] = useState("");
+
+  // Dealers (customers) dropdown states
   const [dealers, setDealers] = useState([]);
   const [showDealerDropdown, setShowDealerDropdown] = useState(false);
   const [dealerSearch, setDealerSearch] = useState("");
 
   useEffect(() => {
-    fetchBills(page);
+    fetchTransactions(page);
+    fetchEmployees();
     fetchDealers();
   }, [page]);
 
   const isValidDate = (str) => /^\d{4}-\d{2}-\d{2}$/.test(str);
 
-  // Fetch unique dealers from bills
-  async function fetchDealers() {
+  // Fetch employees from API
+  const fetchEmployees = async () => {
     try {
-      const res = await api.get("/api/bills/dealers");
-      setDealers(res.data?.dealers || []);
+      const response = await api.get("/api/employees");
+      console.log("Employees API response:", response.data);
+      
+      let employeesData = [];
+      
+      if (response.data && response.data.success) {
+        employeesData = response.data.data || [];
+      } else if (Array.isArray(response.data)) {
+        employeesData = response.data;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        employeesData = response.data.data;
+      }
+      
+      console.log("Processed employees:", employeesData);
+      setEmployees(employeesData);
     } catch (err) {
-      console.warn("Error fetching Employee:", err.message);
-      // If endpoint doesn't exist, extract dealers from bills
-      extractDealersFromBills();
+      console.warn("Error fetching employees:", err.message);
     }
-  }
+  };
 
-  // Extract dealers from existing bills data
-  const extractDealersFromBills = () => {
+  // Fetch dealers (customers) from API
+  const fetchDealers = async () => {
+    try {
+      const response = await api.get("/api/bills/dealers");
+      console.log("Dealers API response:", response.data);
+      
+      let dealersData = [];
+      
+      if (response.data && response.data.success) {
+        dealersData = response.data.dealers || [];
+      } else if (Array.isArray(response.data)) {
+        dealersData = response.data;
+      } else if (response.data && response.data.dealers) {
+        dealersData = response.data.dealers;
+      }
+      
+      console.log("Processed dealers:", dealersData);
+      setDealers(dealersData);
+    } catch (err) {
+      console.warn("Error fetching dealers:", err.message);
+      extractDealersFromTransactions();
+    }
+  };
+
+  // Fallback: Extract dealers from transactions
+  const extractDealersFromTransactions = () => {
     const dealerSet = new Set();
-    bills.forEach(bill => {
-      bill.items?.forEach(item => {
-        if (item.dealerName && item.dealerName !== "N/A") {
-          dealerSet.add(item.dealerName);
-        }
-      });
+    transactions.forEach(transaction => {
+      if (transaction.customers && Array.isArray(transaction.customers)) {
+        transaction.customers.forEach(customer => {
+          if (customer.customerName) {
+            dealerSet.add(customer.customerName);
+          }
+        });
+      }
     });
     setDealers(Array.from(dealerSet).sort());
   };
 
-  async function fetchBills(p = 1) {
+  // Fetch transactions - FIXED FOR BACKEND STRUCTURE
+  const fetchTransactions = async (p = 1) => {
     setLoading(true);
     try {
       const params = { 
         page: p, 
-        limit: 5
+        limit: 10
       };
 
-      // Add filters if provided
+      // Add filters if provided - MATCH BACKEND PARAM NAMES
       if (customer.trim() !== "") {
         params.customer = customer.trim();
       }
 
-      if (dealer.trim() !== "") {
-        params.dealer = dealer.trim();
+      if (employee.trim() !== "") {
+        params.dealer = employee.trim();
       }
 
       if (isValidDate(startDate)) params.startDate = startDate;
       if (isValidDate(endDate)) params.endDate = endDate;
 
-      console.log("Fetching bills with params:", params);
+      console.log("Fetching transactions with params:", params);
 
-      const res = await api.get("/api/bills/filter", { params });
+      // Use the filter endpoint that matches backend
+      const response = await api.get("/api/bills/filter", { params });
       
-      console.log("API Response:", res.data);
+      console.log("Transactions API Response:", response.data);
 
-      const billsData = res.data?.data || res.data?.bills || res.data || [];
-      const totalPagesCount = res.data?.pages || res.data?.totalPages || 1;
-      const totalTransactions = res.data?.total || 0;
+      let transactionsData = [];
+      let totalPagesCount = 1;
+      let totalTransactions = 0;
 
-      setBills(billsData);
+      // Handle backend response structure
+      if (response.data && response.data.success) {
+        transactionsData = response.data.data || [];
+        totalPagesCount = response.data.pages || 1;
+        totalTransactions = response.data.total || transactionsData.length;
+      } else if (Array.isArray(response.data)) {
+        transactionsData = response.data;
+        totalTransactions = response.data.length;
+      } else {
+        transactionsData = response.data || [];
+        totalTransactions = transactionsData.length;
+      }
+
+      console.log("Processed transactions:", transactionsData);
+
+      setTransactions(transactionsData);
       setTotalPages(totalPagesCount);
       
-      // Extract dealers from new bills data if needed
-      if (dealers.length === 0) {
-        extractDealersFromBills();
-      }
-      
       // Calculate statistics
-      if (customer || dealer || startDate || endDate) {
-        calculateStats(billsData, totalTransactions);
-      } else {
-        fetchAllBillsForStats(params);
-      }
+      calculateStats(transactionsData, totalTransactions);
+      
     } catch (err) {
-      console.warn("Error fetching bills:", err.message);
-      Alert.alert("Error", "Failed to fetch bills: " + err.message);
-      setBills([]);
+      console.warn("Error fetching transactions:", err.message);
+      Alert.alert("Error", "Failed to fetch transactions: " + err.message);
+      setTransactions([]);
       setStats({ totalAmount: 0, totalTransactions: 0, averageBill: 0 });
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }
-
-  // Fetch all bills for accurate statistics
-  async function fetchAllBillsForStats(filterParams = {}) {
-    try {
-      const params = { ...filterParams, limit: 1000 };
-      delete params.page;
-
-      const res = await api.get("/api/bills/filter", { params });
-      const allBillsData = res.data?.data || res.data?.bills || res.data || [];
-      
-      calculateStatsFromAllData(allBillsData);
-    } catch (err) {
-      console.warn("Error fetching all bills for stats:", err.message);
-      calculateStats(bills, res.data?.total || 0);
-    }
-  }
-
-  const calculateStatsFromAllData = (allBillsData) => {
-    const totalAmount = allBillsData.reduce((sum, bill) => sum + (bill.totalAmount || 0), 0);
-    const totalTransactions = allBillsData.length;
-    const averageBill = totalTransactions > 0 ? totalAmount / totalTransactions : 0;
-    
-    setStats({
-      totalAmount,
-      totalTransactions,
-      averageBill
-    });
   };
 
-  const calculateStats = (billsData, totalCount = null) => {
-    const totalAmount = billsData.reduce((sum, bill) => sum + (bill.totalAmount || 0), 0);
-    const totalTransactions = totalCount || billsData.length;
+  const calculateStats = (transactionsData, totalCount = null) => {
+    const totalAmount = transactionsData.reduce((sum, transaction) => sum + (transaction.totalAmount || transaction.finalAmount || 0), 0);
+    const totalTransactions = totalCount || transactionsData.length;
     const averageBill = totalTransactions > 0 ? totalAmount / totalTransactions : 0;
     
     setStats({
@@ -180,22 +204,23 @@ export default function ReportsScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchBills(page);
+    fetchTransactions(page);
   };
 
   const resetFilters = () => {
     setStartDate("");
     setEndDate("");
     setCustomer("");
-    setDealer("");
+    setEmployee("");
+    setEmployeeSearch("");
     setDealerSearch("");
     setPage(1);
-    fetchBills(1);
+    fetchTransactions(1);
   };
 
   const applyFilters = () => {
     setPage(1);
-    fetchBills(1);
+    fetchTransactions(1);
   };
 
   const handlePageChange = (newPage) => {
@@ -239,15 +264,33 @@ export default function ReportsScreen() {
     setEndDate("");
   };
 
-  // Dealer Dropdown Functions
+  // Employee Dropdown Functions
+  const handleEmployeeSelect = (selectedEmployee) => {
+    const empName = selectedEmployee.name || selectedEmployee;
+    setEmployee(empName);
+    setShowEmployeeDropdown(false);
+    setEmployeeSearch("");
+  };
+
+  const clearEmployee = () => {
+    setEmployee("");
+    setEmployeeSearch("");
+  };
+
+  const toggleEmployeeDropdown = () => {
+    setShowEmployeeDropdown(!showEmployeeDropdown);
+    setEmployeeSearch("");
+  };
+
+  // Dealer (Customer) Dropdown Functions
   const handleDealerSelect = (selectedDealer) => {
-    setDealer(selectedDealer);
+    setCustomer(selectedDealer);
     setShowDealerDropdown(false);
     setDealerSearch("");
   };
 
   const clearDealer = () => {
-    setDealer("");
+    setCustomer("");
     setDealerSearch("");
   };
 
@@ -256,123 +299,136 @@ export default function ReportsScreen() {
     setDealerSearch("");
   };
 
+  // Filter employees based on search
+  const filteredEmployees = employees.filter(emp => {
+    const empName = emp.name || emp;
+    return empName.toLowerCase().includes(employeeSearch.toLowerCase());
+  });
+
   // Filter dealers based on search
   const filteredDealers = dealers.filter(dealerName =>
     dealerName.toLowerCase().includes(dealerSearch.toLowerCase())
   );
 
-  // ENHANCED BillItem Component
-  const BillItem = ({ item }) => (
-    <View style={styles.billCard}>
-      {/* Header */}
-      <View style={styles.billHeader}>
-        <View style={styles.customerSection}>
-          <View style={styles.customerAvatar}>
-            <Icon name="account" size={20} color="#fff" />
-          </View>
-          <View style={styles.customerInfo}>
-            <Text style={styles.customerName}>{item.customerName}</Text>
-            <Text style={styles.date}>
-              {moment(item.createdAt).format("DD MMM YYYY • hh:mm A")}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.amountSection}>
-          <Text style={styles.amount}>₹{Number(item.totalAmount).toLocaleString()}</Text>
-          <View style={styles.statusBadge}>
-            <Icon name="check-circle" size={9} color="#10b981" />
-            <Text style={styles.statusText}>completed</Text>
-          </View>
-        </View>
-      </View>
-      
-      {/* ENHANCED ITEMS SECTION */}
-      <View style={styles.itemsContainer}>
-        <View style={styles.itemsHeader}>
-         
-          <View style={styles.itemsSummary}>
-            <Text style={styles.itemsSummaryText}>
-              Total: {item.items?.reduce((sum, it) => sum + (it.quantity || 0), 0)} units
-            </Text>
-          </View>
-        </View>
-        
-        <View style={styles.itemsList}>
-          {item.items?.slice(0, 3).map((it, idx) => (
-            <View key={idx} style={styles.itemCard}>
-              <View style={styles.itemMainInfo}>
-                <View style={styles.itemNameSection}>
-                  <Text style={styles.itemName} numberOfLines={1}>
-                    {it.productName}
-                  </Text>
-                  {it.dealerName && it.dealerName !== "N/A" && (
-                    <View style={styles.dealerTag}>
-                      <Icon name="store" size={10} color="#8b5cf6" />
-                      <Text style={styles.dealerTagText}>{it.dealerName}</Text>
-                    </View>
-                  )}
-                </View>
-                
-                <View style={styles.itemDetails}>
-                  <View style={styles.quantityBadge}>
-                    <Icon name="cube-outline" size={12} color="#6b7280" />
-                    <Text style={styles.quantityText}>×{it.quantity}</Text>
-                  </View>
-                  
-                  <View style={styles.priceSection}>
-                    <Text style={styles.rateText}>₹{it.rate}</Text>
-                    <Text style={styles.itemTotalText}>
-                      ₹{(it.quantity * it.rate).toLocaleString()}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-              
-              {it.description && (
-                <Text style={styles.itemDescription} numberOfLines={2}>
-                  {it.description}
-                </Text>
-              )}
-            </View>
-          ))}
-        </View>
-        
-        {item.items && item.items.length > 3 && (
-          <TouchableOpacity style={styles.moreItemsButton}>
-            <Text style={styles.moreItemsText}>
-              +{item.items.length - 3} more items
-            </Text>
-            <Icon name="chevron-down" size={16} color="#6b7280" />
-          </TouchableOpacity>
-        )}
-      </View>
-      
-      {/* Footer */}
-      <View style={styles.billFooter}>
-        <View style={styles.footerInfo}>
-          {item.discountPercent > 0 && (
-            <View style={styles.discountBadge}>
-              <Icon name="tag-outline" size={12} color="#f59e0b" />
-              <Text style={styles.discountText}>{item.discountPercent}% OFF</Text>
-            </View>
-          )}
+  // Transaction Card Component - UPDATED FOR BACKEND STRUCTURE
+  const TransactionCard = ({ transaction }) => {
+    // Get employee name from backend structure
+    const employeeName = transaction.employeeName || "Unknown Employee";
+    
+    // Get customer names - handle multiple customers from backend
+    const getCustomerNames = () => {
+      if (transaction.customers && Array.isArray(transaction.customers)) {
+        return transaction.customers.map(c => c.customerName).join(", ");
+      }
+      return "No customers";
+    };
 
-          <View style={styles.paymentMethod}>
-            <Icon name="credit-card" size={12} color="#6b7280" />
-             <Text style={styles.itemsLabel}> ITEMS {item.items?.length || 0}</Text>
+    const customerNames = getCustomerNames();
+    const totalItems = transaction.totalItems || transaction.customers?.reduce((sum, cust) => 
+      sum + (cust.items?.length || 0), 0) || 0;
+    const uniqueCustomers = transaction.customers?.length || 0;
+    const transactionAmount = transaction.finalAmount || transaction.totalAmount || 0;
+
+    return (
+      <View style={styles.transactionCard}>
+        {/* Header with Employee Info */}
+        <View style={styles.transactionHeader}>
+          <View style={styles.employeeSection}>
+            <View style={styles.employeeAvatar}>
+              <Icon name="account-tie" size={20} color="#fff" />
+            </View>
+            <View style={styles.employeeInfo}>
+              <Text style={styles.employeeName}>{employeeName}</Text>
+              <Text style={styles.transactionDate}>
+                {moment(transaction.createdAt).format("DD MMM YYYY • hh:mm A")}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.amountSection}>
+            <Text style={styles.amount}>₹{Number(transactionAmount).toLocaleString()}</Text>
+            <View style={styles.statusBadge}>
+              <Icon name="check-circle" size={9} color="#10b981" />
+              <Text style={styles.statusText}>completed</Text>
+            </View>
+          </View>
+        </View>
+        
+        {/* Customer Information */}
+        <View style={styles.customersSection}>
+          <View style={styles.customersHeader}>
+            <View style={styles.customersLabel}>
+              <Icon name="account-group" size={12} color="#6b7280" />
+              <Text style={styles.customersLabelText}>
+                CUSTOMERS ({uniqueCustomers})
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.customerNames} numberOfLines={2}>
+            {customerNames}
+          </Text>
+        </View>
+
+        {/* Items Summary */}
+        <View style={styles.itemsSection}>
+          <View style={styles.itemsHeader}>
+            <View style={styles.itemsLabel}>
+              <Icon name="package-variant" size={12} color="#6b7280" />
+              <Text style={styles.itemsLabelText}>ITEMS</Text>
+            </View>
+            <View style={styles.itemsSummary}>
+              <Text style={styles.itemsSummaryText}>
+                Total: {totalItems} items
+              </Text>
+            </View>
           </View>
           
+          {/* Show customer items breakdown */}
+          <View style={styles.customersBreakdown}>
+            {transaction.customers?.slice(0, 3).map((customer, idx) => (
+              <View key={idx} style={styles.customerBreakdown}>
+                <Text style={styles.customerBreakdownName}>
+                  {customer.customerName}
+                </Text>
+                <Text style={styles.customerBreakdownItems}>
+                  {customer.items?.length || 0} items • ₹{Number(customer.subtotal || 0).toLocaleString()}
+                </Text>
+              </View>
+            ))}
+            {transaction.customers && transaction.customers.length > 3 && (
+              <Text style={styles.moreCustomersText}>
+                +{transaction.customers.length - 3} more customers
+              </Text>
+            )}
+          </View>
         </View>
-        <TouchableOpacity 
-          style={styles.viewButton}
-          onPress={() => navigation.navigate('TransactionDetail', { transaction: item })}
-        >
-          <Icon name="eye-outline" size={12} color="#22c55e" />
-          <Text style={styles.viewButtonText}>View Details</Text>
-        </TouchableOpacity>
+        
+        {/* Footer */}
+        <View style={styles.transactionFooter}>
+          <View style={styles.footerInfo}>
+            {transaction.discountPercent > 0 && (
+              <View style={styles.discountBadge}>
+                <Icon name="tag-outline" size={12} color="#f59e0b" />
+                <Text style={styles.discountText}>{transaction.discountPercent}% OFF</Text>
+              </View>
+            )}
+            <View style={styles.commissionBadge}>
+              <Icon name="cash" size={12} color="#8b5cf6" />
+              <Text style={styles.commissionText}>
+                Commission: ₹{Number(transaction.totalCommission || 0).toLocaleString()}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity 
+            style={styles.viewButton}
+            onPress={() => navigation.navigate('TransactionDetail', { transaction })}
+          >
+            <Icon name="eye-outline" size={12} color="#22c55e" />
+            <Text style={styles.viewButtonText}>View Details</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   const StatCard = ({ title, value, subtitle, icon, color }) => (
     <View style={styles.statCard}>
@@ -387,6 +443,78 @@ export default function ReportsScreen() {
     </View>
   );
 
+  // Employee Dropdown Component
+  const EmployeeDropdown = () => (
+    <Modal
+      visible={showEmployeeDropdown}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setShowEmployeeDropdown(false)}
+    >
+      <TouchableOpacity 
+        style={styles.dropdownOverlay}
+        activeOpacity={1}
+        onPress={() => setShowEmployeeDropdown(false)}
+      >
+        <View style={styles.dropdownContainer}>
+          <View style={styles.dropdownHeader}>
+            <Text style={styles.dropdownTitle}>Select Employee</Text>
+            <TouchableOpacity onPress={() => setShowEmployeeDropdown(false)}>
+              <Icon name="close" size={24} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.searchInputContainer}>
+            <Icon name="magnify" size={20} color="#6b7280" />
+            <TextInput
+              placeholder="Search employee..."
+              value={employeeSearch}
+              onChangeText={setEmployeeSearch}
+              style={styles.dropdownSearchInput}
+              placeholderTextColor="#9ca3af"
+              autoFocus={true}
+            />
+          </View>
+
+          <FlatList
+            data={filteredEmployees}
+            keyExtractor={(item) => item._id || item.id || item}
+            renderItem={({ item }) => {
+              const empName = item.name || item;
+              return (
+                <TouchableOpacity
+                  style={styles.employeeOption}
+                  onPress={() => handleEmployeeSelect(item)}
+                >
+                  <View style={styles.employeeOptionInfo}>
+                    <View style={styles.employeeOptionAvatar}>
+                      <Icon name="account" size={20} color="#fff" />
+                    </View>
+                    <Text style={styles.employeeOptionText}>{empName}</Text>
+                  </View>
+                  {employee === empName && (
+                    <Icon name="check" size={20} color="#22c55e" />
+                  )}
+                </TouchableOpacity>
+              );
+            }}
+            ListEmptyComponent={
+              <View style={styles.noEmployeesContainer}>
+                <Icon name="account-alert" size={40} color="#d1d5db" />
+                <Text style={styles.noEmployeesText}>No employees found</Text>
+                <Text style={styles.noEmployeesSubtext}>
+                  {employeeSearch ? "Try a different search term" : "No employees available"}
+                </Text>
+              </View>
+            }
+            style={styles.dropdownList}
+          />
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+
+  // Dealer (Customer) Dropdown Component
   const DealerDropdown = () => (
     <Modal
       visible={showDealerDropdown}
@@ -401,7 +529,7 @@ export default function ReportsScreen() {
       >
         <View style={styles.dropdownContainer}>
           <View style={styles.dropdownHeader}>
-            <Text style={styles.dropdownTitle}>Select Employee</Text>
+            <Text style={styles.dropdownTitle}>Select Customer</Text>
             <TouchableOpacity onPress={() => setShowDealerDropdown(false)}>
               <Icon name="close" size={24} color="#6b7280" />
             </TouchableOpacity>
@@ -410,7 +538,7 @@ export default function ReportsScreen() {
           <View style={styles.searchInputContainer}>
             <Icon name="magnify" size={20} color="#6b7280" />
             <TextInput
-              placeholder="Search Employee..."
+              placeholder="Search customer..."
               value={dealerSearch}
               onChangeText={setDealerSearch}
               style={styles.dropdownSearchInput}
@@ -427,8 +555,13 @@ export default function ReportsScreen() {
                 style={styles.dealerOption}
                 onPress={() => handleDealerSelect(item)}
               >
-                <Text style={styles.dealerOptionText}>{item}</Text>
-                {dealer === item && (
+                <View style={styles.dealerOptionInfo}>
+                  <View style={styles.dealerOptionAvatar}>
+                    <Icon name="account" size={20} color="#fff" />
+                  </View>
+                  <Text style={styles.dealerOptionText}>{item}</Text>
+                </View>
+                {customer === item && (
                   <Icon name="check" size={20} color="#22c55e" />
                 )}
               </TouchableOpacity>
@@ -436,9 +569,9 @@ export default function ReportsScreen() {
             ListEmptyComponent={
               <View style={styles.noDealersContainer}>
                 <Icon name="account-alert" size={40} color="#d1d5db" />
-                <Text style={styles.noDealersText}>No Employee found</Text>
+                <Text style={styles.noDealersText}>No customers found</Text>
                 <Text style={styles.noDealersSubtext}>
-                  {dealerSearch ? "Try a different search term" : "No Employee available"}
+                  {dealerSearch ? "Try a different search term" : "No customers available"}
                 </Text>
               </View>
             }
@@ -474,6 +607,9 @@ export default function ReportsScreen() {
           minimumDate={startDate ? new Date(startDate) : undefined}
         />
       )}
+
+      {/* Employee Dropdown */}
+      <EmployeeDropdown />
 
       {/* Dealer Dropdown */}
       <DealerDropdown />
@@ -519,7 +655,7 @@ export default function ReportsScreen() {
               />
               <StatCard
                 title="Current Page"
-                value={bills.length.toString()}
+                value={transactions.length.toString()}
                 subtitle="Displayed now"
                 icon="file-document"
                 color="#8b5cf6"
@@ -586,15 +722,15 @@ export default function ReportsScreen() {
                   <Icon name="account-tie" size={14} color="#6b7280" /> Employee
                 </Text>
                 <TouchableOpacity 
-                  style={styles.dealerInput}
-                  onPress={toggleDealerDropdown}
+                  style={styles.employeeInput}
+                  onPress={toggleEmployeeDropdown}
                 >
-                  <Text style={[styles.dealerInputText, !dealer && styles.placeholderText]}>
-                    {dealer || "Select Employee"}
+                  <Text style={[styles.employeeInputText, !employee && styles.placeholderText]}>
+                    {employee || "Select Employee"}
                   </Text>
-                  <View style={styles.dealerInputIcons}>
-                    {dealer ? (
-                      <TouchableOpacity onPress={clearDealer} style={styles.clearButton}>
+                  <View style={styles.employeeInputIcons}>
+                    {employee ? (
+                      <TouchableOpacity onPress={clearEmployee} style={styles.clearButton}>
                         <Icon name="close-circle" size={18} color="#ef4444" />
                       </TouchableOpacity>
                     ) : null}
@@ -607,17 +743,22 @@ export default function ReportsScreen() {
                 <Text style={styles.filterLabel}>
                   <Icon name="account" size={14} color="#6b7280" /> Customer
                 </Text>
-                <View style={styles.searchInput}>
-                  <Icon name="magnify" size={20} color="#6b7280" style={styles.inputLeadingIcon} />
-                  <TextInput
-                    placeholder="Search customer name..."
-                    value={customer}
-                    onChangeText={setCustomer}
-                    style={styles.input}
-                    placeholderTextColor="#9ca3af"
-                    onSubmitEditing={applyFilters}
-                  />
-                </View>
+                <TouchableOpacity 
+                  style={styles.dealerInput}
+                  onPress={toggleDealerDropdown}
+                >
+                  <Text style={[styles.dealerInputText, !customer && styles.placeholderText]}>
+                    {customer || "Select Customer"}
+                  </Text>
+                  <View style={styles.dealerInputIcons}>
+                    {customer ? (
+                      <TouchableOpacity onPress={clearDealer} style={styles.clearButton}>
+                        <Icon name="close-circle" size={18} color="#ef4444" />
+                      </TouchableOpacity>
+                    ) : null}
+                    <Icon name="chevron-down" size={18} color="#6b7280" />
+                  </View>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -636,8 +777,9 @@ export default function ReportsScreen() {
               <View>
                 <Text style={styles.sectionTitle}>Recent Transactions</Text>
                 <Text style={styles.sectionSubtitle}>
-                  Showing {bills.length} of {stats.totalTransactions} transactions
-                  {dealer && ` • Dealer: ${dealer}`}
+                  Showing {transactions.length} of {stats.totalTransactions} transactions
+                  {employee && ` • Employee: ${employee}`}
+                  {customer && ` • Customer: ${customer}`}
                 </Text>
               </View>
               <TouchableOpacity style={styles.exportButton}>
@@ -653,28 +795,31 @@ export default function ReportsScreen() {
               </View>
             ) : (
               <>
-                {!bills || bills.length === 0 ? (
+                {!transactions || transactions.length === 0 ? (
                   <View style={styles.emptyState}>
                     <View style={styles.emptyIcon}>
                       <Icon name="chart-bar" size={64} color="#d1d5db" />
                     </View>
                     <Text style={styles.emptyText}>No transactions found</Text>
                     <Text style={styles.emptySubtext}>
-                      {customer || dealer || startDate || endDate 
+                      {customer || employee || startDate || endDate 
                         ? "Try adjusting your search criteria" 
                         : "Start creating bills to see your transaction history"
                       }
                     </Text>
-                    <TouchableOpacity style={styles.emptyActionButton}>
+                    <TouchableOpacity 
+                      style={styles.emptyActionButton}
+                      onPress={() => navigation.navigate('PointOfSale')}
+                    >
                       <Icon name="plus" size={18} color="#fff" />
                       <Text style={styles.emptyActionText}>Create First Bill</Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
                   <FlatList
-                    data={bills}
+                    data={transactions}
                     keyExtractor={(item) => item._id || Math.random().toString()}
-                    renderItem={({ item }) => <BillItem item={item} />}
+                    renderItem={({ item }) => <TransactionCard transaction={item} />}
                     scrollEnabled={false}
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={styles.listContent}
@@ -878,6 +1023,26 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     marginHorizontal: 8,
   },
+  // Employee Input Styles
+  employeeInput: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#f8fafc",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  employeeInputText: {
+    fontSize: 16,
+    color: "#374151",
+  },
+  employeeInputIcons: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
   // Dealer Input Styles
   dealerInput: {
     flexDirection: "row",
@@ -946,6 +1111,33 @@ const styles = StyleSheet.create({
   dropdownList: {
     maxHeight: 300,
   },
+  employeeOption: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  employeeOptionInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  employeeOptionAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#3b82f6",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  employeeOptionText: {
+    fontSize: 16,
+    color: "#374151",
+    flex: 1,
+  },
   dealerOption: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -954,9 +1146,40 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#f3f4f6",
   },
+  dealerOptionInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  dealerOptionAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#8b5cf6",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
   dealerOptionText: {
     fontSize: 16,
     color: "#374151",
+    flex: 1,
+  },
+  noEmployeesContainer: {
+    alignItems: "center",
+    padding: 40,
+  },
+  noEmployeesText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#6b7280",
+    marginTop: 12,
+  },
+  noEmployeesSubtext: {
+    fontSize: 14,
+    color: "#9ca3af",
+    textAlign: "center",
+    marginTop: 4,
   },
   noDealersContainer: {
     alignItems: "center",
@@ -973,24 +1196,6 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     textAlign: "center",
     marginTop: 4,
-  },
-  searchInput: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f8fafc",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    paddingHorizontal: 12,
-  },
-  input: {
-    flex: 1,
-    padding: 12,
-    fontSize: 16,
-    color: "#374151",
-  },
-  inputLeadingIcon: {
-    marginRight: 8,
   },
   searchButton: {
     flexDirection: "row",
@@ -1039,8 +1244,8 @@ const styles = StyleSheet.create({
   listContent: {
     paddingTop: 8,
   },
-  // ENHANCED Bill Card Styles
-  billCard: {
+  // UPDATED: Transaction Card Styles for backend structure
+  transactionCard: {
     backgroundColor: "#ffffff",
     padding: 20,
     borderRadius: 20,
@@ -1053,42 +1258,42 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 4,
   },
-  billHeader: {
+  transactionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     marginBottom: 16,
   },
-  customerSection: {
+  employeeSection: {
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
   },
-  customerAvatar: {
+  employeeAvatar: {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: "#3b82f6",
+    backgroundColor: "#f59e0b",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
-    shadowColor: "#3b82f6",
+    shadowColor: "#f59e0b",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 2,
   },
-  customerInfo: {
+  employeeInfo: {
     flex: 1,
   },
-  customerName: {
+  employeeName: {
     fontSize: 17,
     fontWeight: "800",
     color: "#1f2937",
     marginBottom: 2,
     letterSpacing: -0.3,
   },
-  date: {
+  transactionDate: {
     fontSize: 13,
     color: "#6b7280",
     fontWeight: "500",
@@ -1120,11 +1325,44 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     letterSpacing: 0.3,
   },
-  // ENHANCED Items Container
-  itemsContainer: {
+  // Customers Section
+  customersSection: {
     backgroundColor: "#f8fafc",
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
+  },
+  customersHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  customersLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  customersLabelText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#6b7280",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    marginLeft: 4,
+  },
+  customerNames: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+    lineHeight: 18,
+  },
+  // Items Section
+  itemsSection: {
+    backgroundColor: "#f8fafc",
+    padding: 16,
+    borderRadius: 12,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: "#f1f5f9",
@@ -1136,11 +1374,16 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   itemsLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  itemsLabelText: {
     fontSize: 10,
     fontWeight: "800",
     color: "#6b7280",
     letterSpacing: 0.8,
     textTransform: "uppercase",
+    marginLeft: 4,
   },
   itemsSummary: {
     backgroundColor: "#ffffff",
@@ -1155,103 +1398,39 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#6b7280",
   },
-  itemsList: {
+  customersBreakdown: {
     gap: 8,
   },
-  itemCard: {
+  customerBreakdown: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     backgroundColor: "#ffffff",
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "#f3f4f6",
   },
-  itemMainInfo: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 6,
-  },
-  itemNameSection: {
+  customerBreakdownName: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#374151",
     flex: 1,
-    marginRight: 12,
   },
-  itemName: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#374151",
-    marginBottom: 4,
-  },
-  dealerTag: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f8f5ff",
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
-  },
-  dealerTagText: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: "#8b5cf6",
-    marginLeft: 3,
-  },
-  itemDetails: {
-    alignItems: "flex-end",
-  },
-  quantityBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f8fafc",
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 4,
-    marginBottom: 4,
-  },
-  quantityText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#6b7280",
-    marginLeft: 2,
-  },
-  priceSection: {
-    alignItems: "flex-end",
-  },
-  rateText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#374151",
-    marginBottom: 1,
-  },
-  itemTotalText: {
+  customerBreakdownItems: {
     fontSize: 12,
-    fontWeight: "800",
-    color: "#22c55e",
-  },
-  itemDescription: {
-    fontSize: 11,
-    color: "#9ca3af",
-    fontStyle: "italic",
-    lineHeight: 14,
-  },
-  moreItemsButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 10,
-    backgroundColor: "#ffffff",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    marginTop: 8,
-  },
-  moreItemsText: {
-    fontSize: 13,
     fontWeight: "600",
     color: "#6b7280",
-    marginRight: 4,
   },
-  billFooter: {
+  moreCustomersText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#6b7280",
+    textAlign: "center",
+    fontStyle: "italic",
+    marginTop: 4,
+  },
+  transactionFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -1277,19 +1456,21 @@ const styles = StyleSheet.create({
     color: "#f59e0b",
     marginLeft: 4,
   },
-  paymentMethod: {
+  commissionBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f8fafc",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    backgroundColor: "#f8f5ff",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#ede9fe",
   },
-  paymentText: {
+  commissionText: {
     fontSize: 11,
-    fontWeight: "600",
-    color: "#6b7280",
-    marginLeft: 3,
+    fontWeight: "700",
+    color: "#8b5cf6",
+    marginLeft: 4,
   },
   viewButton: {
     flexDirection: "row",

@@ -15,13 +15,6 @@ import api from "../api/client";
 
 const { width } = Dimensions.get('window');
 
-const DEFAULT_CHART_DATA = {
-  labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-  datasets: [{
-    data: [12000, 15000, 8000, 22000, 18000, 25000, 19000]
-  }]
-};
-
 const GAP_SIZE = 12;
 
 export default function AnalyticsScreen() {
@@ -31,7 +24,7 @@ export default function AnalyticsScreen() {
     productSales: [],
     monthlyRevenue: [],
     customerStats: [],
-    dealerStats: []
+    employeeStats: []
   });
 
   useEffect(() => {
@@ -47,13 +40,16 @@ export default function AnalyticsScreen() {
   async function fetchAnalyticsData() {
     setLoading(true);
     try {
-      const billsResponse = await api.get("/api/bills?limit=100");
+      const billsResponse = await api.get("/api/bills?limit=1000"); // Increased limit for better analytics
       const bills = billsResponse.data?.bills || billsResponse.data || [];
       
       const productsResponse = await api.get("/api/products");
       const products = productsResponse.data || [];
+
+      const employeesResponse = await api.get("/api/employees");
+      const employees = employeesResponse.data || [];
       
-      const analytics = generateAnalyticsData(bills, products);
+      const analytics = generateAnalyticsData(bills, products, employees);
       setAnalyticsData(analytics);
     } catch (err) {
       console.warn("Analytics error:", err.message || err);
@@ -62,34 +58,74 @@ export default function AnalyticsScreen() {
     }
   }
 
-  const generateAnalyticsData = (bills, products) => {
+  const generateAnalyticsData = (bills, products, employees) => {
+    // 1. PRODUCT SALES ANALYSIS - Group products beyond top 5 as "Other"
     const productSalesMap = {};
+    
     bills.forEach(bill => {
-      bill.items?.forEach(item => {
-        const productId = item.productId;
-        const product = products.find(p => p._id === productId);
-        const productName = product?.name || `Product ${productId}`;
-        const quantity = item.quantity || 0;
-        
-        if (productSalesMap[productName]) {
-          productSalesMap[productName] += quantity;
-        } else {
-          productSalesMap[productName] = quantity;
-        }
+      // NEW APPROACH: Handle multiple customers per bill
+      bill.customers?.forEach(customer => {
+        customer.items?.forEach(item => {
+          const productId = item.productId;
+          const product = products.find(p => p._id === productId);
+          const productName = product?.name || `Product ${productId}`;
+          const quantity = item.quantity || 0;
+          
+          if (productSalesMap[productName]) {
+            productSalesMap[productName] += quantity;
+          } else {
+            productSalesMap[productName] = quantity;
+          }
+        });
       });
+
+      // OLD APPROACH: Backward compatibility for bills without customers array
+      if (!bill.customers && bill.items) {
+        bill.items.forEach(item => {
+          const productId = item.productId;
+          const product = products.find(p => p._id === productId);
+          const productName = product?.name || `Product ${productId}`;
+          const quantity = item.quantity || 0;
+          
+          if (productSalesMap[productName]) {
+            productSalesMap[productName] += quantity;
+          } else {
+            productSalesMap[productName] = quantity;
+          }
+        });
+      }
     });
 
-    const productSales = Object.entries(productSalesMap)
-      .map(([name, quantity]) => ({
-        name,
-        quantity,
-        color: getRandomColor(),
+    // Sort and get top 5 products, group rest as "Other"
+    const allProductSales = Object.entries(productSalesMap)
+      .map(([name, quantity]) => ({ name, quantity }))
+      .sort((a, b) => b.quantity - a.quantity);
+
+    const topProducts = allProductSales.slice(0, 5);
+    const otherProductsTotal = allProductSales.slice(5).reduce((sum, product) => sum + product.quantity, 0);
+
+    const productSales = [
+      ...topProducts.map((product, index) => ({
+        name: product.name,
+        quantity: product.quantity,
+        color: getColorByIndex(index),
         legendFontColor: '#7F7F7F',
         legendFontSize: 12
       }))
-      .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, 6);
+    ];
 
+    // Add "Other" category if there are more than 5 products
+    if (otherProductsTotal > 0) {
+      productSales.push({
+        name: 'Other',
+        quantity: otherProductsTotal,
+        color: '#9CA3AF', // Gray color for "Other"
+        legendFontColor: '#7F7F7F',
+        legendFontSize: 12
+      });
+    }
+
+    // 2. MONTHLY REVENUE (No changes needed here as it works with bill totals)
     const monthlyRevenue = Array(6).fill(0).map((_, index) => {
       const month = new Date();
       month.setMonth(month.getMonth() - (5 - index));
@@ -103,7 +139,7 @@ export default function AnalyticsScreen() {
                billDate.getFullYear() === month.getFullYear();
       });
       
-      const revenue = monthBills.reduce((sum, bill) => sum + (bill.totalAmount || 0), 0);
+      const revenue = monthBills.reduce((sum, bill) => sum + (bill.finalAmount || bill.totalAmount || 0), 0);
       
       return {
         month: `${monthKey} '${year}`,
@@ -112,19 +148,40 @@ export default function AnalyticsScreen() {
       };
     });
 
+    // 3. CUSTOMER STATS - NEW APPROACH: Aggregate across all bills and customers
     const customerMap = {};
+    
     bills.forEach(bill => {
-      const customer = bill.customerName || 'Unknown Customer';
-      const amount = bill.totalAmount || 0;
-      
-      if (customerMap[customer]) {
-        customerMap[customer].totalAmount += amount;
-        customerMap[customer].transactionCount += 1;
-      } else {
-        customerMap[customer] = {
-          totalAmount: amount,
-          transactionCount: 1
-        };
+      // NEW APPROACH: Multiple customers per bill
+      bill.customers?.forEach(customer => {
+        const customerName = customer.customerName || 'Unknown Customer';
+        const amount = customer.subtotal || 0;
+        
+        if (customerMap[customerName]) {
+          customerMap[customerName].totalAmount += amount;
+          customerMap[customerName].transactionCount += 1;
+        } else {
+          customerMap[customerName] = {
+            totalAmount: amount,
+            transactionCount: 1
+          };
+        }
+      });
+
+      // OLD APPROACH: Backward compatibility
+      if (!bill.customers) {
+        const customerName = bill.customerName || 'Unknown Customer';
+        const amount = bill.totalAmount || 0;
+        
+        if (customerMap[customerName]) {
+          customerMap[customerName].totalAmount += amount;
+          customerMap[customerName].transactionCount += 1;
+        } else {
+          customerMap[customerName] = {
+            totalAmount: amount,
+            transactionCount: 1
+          };
+        }
       }
     });
 
@@ -136,25 +193,53 @@ export default function AnalyticsScreen() {
       .sort((a, b) => b.totalAmount - a.totalAmount)
       .slice(0, 5);
 
-    const dealerMap = {};
+    // 4. EMPLOYEE STATS - NEW APPROACH: Track employees with multiple customers
+    const employeeMap = {};
+    
     bills.forEach(bill => {
-      bill.items?.forEach(item => {
-        const dealer = item.dealerName || 'Unknown Dealer';
-        const commission = ((item.rate || 0) * (item.quantity || 0) * (item.commissionPercent || 0)) / 100;
-        
-        if (dealerMap[dealer]) {
-          dealerMap[dealer].totalCommission += commission;
-          dealerMap[dealer].salesCount += 1;
-        } else {
-          dealerMap[dealer] = {
-            totalCommission: commission,
-            salesCount: 1
-          };
-        }
+      const employeeName = bill.employeeName || 'Unknown Employee';
+      const employeeId = bill.employeeId;
+      
+      // Calculate total commission and sales for this bill
+      let billCommission = 0;
+      let billSalesCount = 0;
+      let billRevenue = 0;
+
+      // NEW APPROACH: Multiple customers
+      bill.customers?.forEach(customer => {
+        customer.items?.forEach(item => {
+          billCommission += item.commissionAmount || 0;
+          billSalesCount += 1;
+        });
+        billRevenue += customer.subtotal || 0;
       });
+
+      // OLD APPROACH: Backward compatibility
+      if (!bill.customers && bill.items) {
+        bill.items.forEach(item => {
+          billCommission += item.commissionAmount || 0;
+          billSalesCount += 1;
+        });
+        billRevenue = bill.totalAmount || 0;
+      }
+
+      if (employeeMap[employeeName]) {
+        employeeMap[employeeName].totalCommission += billCommission;
+        employeeMap[employeeName].salesCount += billSalesCount;
+        employeeMap[employeeName].totalRevenue += billRevenue;
+        employeeMap[employeeName].billCount += 1;
+      } else {
+        employeeMap[employeeName] = {
+          totalCommission: billCommission,
+          salesCount: billSalesCount,
+          totalRevenue: billRevenue,
+          billCount: 1,
+          employeeId: employeeId
+        };
+      }
     });
 
-    const dealerStats = Object.entries(dealerMap)
+    const employeeStats = Object.entries(employeeMap)
       .map(([name, data]) => ({
         name,
         ...data
@@ -166,16 +251,15 @@ export default function AnalyticsScreen() {
       productSales,
       monthlyRevenue,
       customerStats,
-      dealerStats
+      employeeStats // Renamed from dealerStats to employeeStats
     };
   };
 
-  const getRandomColor = () => {
+  const getColorByIndex = (index) => {
     const colors = [
-      '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD',
-      '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9', '#F8C471', '#82E0AA'
+      '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'
     ];
-    return colors[Math.floor(Math.random() * colors.length)];
+    return colors[index % colors.length];
   };
 
   const StatCard = ({ title, value, subtitle, icon, color }) => (
@@ -190,6 +274,7 @@ export default function AnalyticsScreen() {
   );
 
   const totalSixMonthRevenue = analyticsData.monthlyRevenue.reduce((sum, month) => sum + month.revenue, 0);
+  const totalProductsSold = analyticsData.productSales.reduce((sum, product) => sum + product.quantity, 0);
 
   return (
     <View style={styles.container}>
@@ -216,9 +301,9 @@ export default function AnalyticsScreen() {
             color="#10b981"
           />
           <StatCard
-            title="Active Products"
-            value={analyticsData.productSales.length}
-            subtitle="Top selling"
+            title="Products Sold"
+            value={totalProductsSold}
+            subtitle="Total units"
             icon="package-variant"
             color="#3b82f6"
           />
@@ -230,8 +315,8 @@ export default function AnalyticsScreen() {
             color="#f59e0b"
           />
           <StatCard
-            title="Active Employee"
-            value={analyticsData.dealerStats.length}
+            title="Active Employees"
+            value={analyticsData.employeeStats.length}
             subtitle="By commission"
             icon="account-tie"
             color="#8b5cf6"
@@ -304,8 +389,8 @@ export default function AnalyticsScreen() {
             analyticsData.customerStats.map((customer, index) => (
               <View key={index} style={styles.listItem}>
                 <View style={styles.itemLeft}>
-                  <View style={[styles.itemIcon, { backgroundColor: '#e0f2f7' }]}> {/* Changed background color */}
-                    <Icon name="account-circle" size={20} color="#007bff" /> {/* Customer Icon */}
+                  <View style={[styles.itemIcon, { backgroundColor: '#e0f2f7' }]}>
+                    <Icon name="account-circle" size={20} color="#007bff" />
                   </View>
                   <View style={styles.itemInfo}>
                     <Text style={styles.itemTitle}>{customer.name}</Text>
@@ -328,30 +413,30 @@ export default function AnalyticsScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Top Employee</Text>
-          {analyticsData.dealerStats.length > 0 ? (
-            analyticsData.dealerStats.map((dealer, index) => (
+          <Text style={styles.sectionTitle}>Top Employees</Text>
+          {analyticsData.employeeStats.length > 0 ? (
+            analyticsData.employeeStats.map((employee, index) => (
               <View key={index} style={styles.listItem}>
                 <View style={styles.itemLeft}>
-                  <View style={[styles.itemIcon, { backgroundColor: '#e6f7ed' }]}> {/* Changed background color */}
-                    <Icon name="account-tie" size={20} color="#18a558" /> {/* Dealer Icon */}
+                  <View style={[styles.itemIcon, { backgroundColor: '#e6f7ed' }]}>
+                    <Icon name="account-tie" size={20} color="#18a558" />
                   </View>
                   <View style={styles.itemInfo}>
-                    <Text style={styles.itemTitle}>{dealer.name}</Text>
+                    <Text style={styles.itemTitle}>{employee.name}</Text>
                     <Text style={styles.itemSubtitle}>
-                      {dealer.salesCount} sale{dealer.salesCount !== 1 ? 's' : ''}
+                      {employee.billCount} bill{employee.billCount !== 1 ? 's' : ''} • {employee.salesCount} sales
                     </Text>
                   </View>
                 </View>
                 <Text style={styles.itemAmount}>
-                  ₹{Number(dealer.totalCommission).toLocaleString('en-IN')}
+                  ₹{Number(employee.totalCommission).toLocaleString('en-IN')}
                 </Text>
               </View>
             ))
           ) : (
             <View style={styles.emptyState}>
               <Icon name="account-tie-outline" size={32} color="#d1d5db" />
-              <Text style={styles.emptyText}>No dealer data available</Text>
+              <Text style={styles.emptyText}>No employee data available</Text>
             </View>
           )}
         </View>
@@ -364,6 +449,7 @@ export default function AnalyticsScreen() {
   );
 }
 
+// Styles remain exactly the same as your original
 const styles = StyleSheet.create({
   container: {
     flex: 1,
