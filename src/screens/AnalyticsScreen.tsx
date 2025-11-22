@@ -40,7 +40,7 @@ export default function AnalyticsScreen() {
   async function fetchAnalyticsData() {
     setLoading(true);
     try {
-      const billsResponse = await api.get("/api/bills?limit=1000"); // Increased limit for better analytics
+      const billsResponse = await api.get("/api/bills?limit=1000");
       const bills = billsResponse.data?.bills || billsResponse.data || [];
       
       const productsResponse = await api.get("/api/products");
@@ -63,7 +63,6 @@ export default function AnalyticsScreen() {
     const productSalesMap = {};
     
     bills.forEach(bill => {
-      // NEW APPROACH: Handle multiple customers per bill
       bill.customers?.forEach(customer => {
         customer.items?.forEach(item => {
           const productId = item.productId;
@@ -79,7 +78,6 @@ export default function AnalyticsScreen() {
         });
       });
 
-      // OLD APPROACH: Backward compatibility for bills without customers array
       if (!bill.customers && bill.items) {
         bill.items.forEach(item => {
           const productId = item.productId;
@@ -104,13 +102,14 @@ export default function AnalyticsScreen() {
     const topProducts = allProductSales.slice(0, 5);
     const otherProductsTotal = allProductSales.slice(5).reduce((sum, product) => sum + product.quantity, 0);
 
+    // Truncate long product names
     const productSales = [
       ...topProducts.map((product, index) => ({
-        name: product.name,
+        name: truncateProductName(product.name, 15), // Truncate to 15 characters
         quantity: product.quantity,
         color: getColorByIndex(index),
         legendFontColor: '#7F7F7F',
-        legendFontSize: 12
+        legendFontSize: 10 // Reduced font size for better fit
       }))
     ];
 
@@ -119,13 +118,13 @@ export default function AnalyticsScreen() {
       productSales.push({
         name: 'Other',
         quantity: otherProductsTotal,
-        color: '#9CA3AF', // Gray color for "Other"
+        color: '#9CA3AF',
         legendFontColor: '#7F7F7F',
-        legendFontSize: 12
+        legendFontSize: 10
       });
     }
 
-    // 2. MONTHLY REVENUE (No changes needed here as it works with bill totals)
+    // 2. MONTHLY REVENUE
     const monthlyRevenue = Array(6).fill(0).map((_, index) => {
       const month = new Date();
       month.setMonth(month.getMonth() - (5 - index));
@@ -148,11 +147,10 @@ export default function AnalyticsScreen() {
       };
     });
 
-    // 3. CUSTOMER STATS - NEW APPROACH: Aggregate across all bills and customers
+    // 3. CUSTOMER STATS
     const customerMap = {};
     
     bills.forEach(bill => {
-      // NEW APPROACH: Multiple customers per bill
       bill.customers?.forEach(customer => {
         const customerName = customer.customerName || 'Unknown Customer';
         const amount = customer.subtotal || 0;
@@ -168,7 +166,6 @@ export default function AnalyticsScreen() {
         }
       });
 
-      // OLD APPROACH: Backward compatibility
       if (!bill.customers) {
         const customerName = bill.customerName || 'Unknown Customer';
         const amount = bill.totalAmount || 0;
@@ -193,19 +190,17 @@ export default function AnalyticsScreen() {
       .sort((a, b) => b.totalAmount - a.totalAmount)
       .slice(0, 5);
 
-    // 4. EMPLOYEE STATS - NEW APPROACH: Track employees with multiple customers
+    // 4. EMPLOYEE STATS
     const employeeMap = {};
     
     bills.forEach(bill => {
       const employeeName = bill.employeeName || 'Unknown Employee';
       const employeeId = bill.employeeId;
       
-      // Calculate total commission and sales for this bill
       let billCommission = 0;
       let billSalesCount = 0;
       let billRevenue = 0;
 
-      // NEW APPROACH: Multiple customers
       bill.customers?.forEach(customer => {
         customer.items?.forEach(item => {
           billCommission += item.commissionAmount || 0;
@@ -214,7 +209,6 @@ export default function AnalyticsScreen() {
         billRevenue += customer.subtotal || 0;
       });
 
-      // OLD APPROACH: Backward compatibility
       if (!bill.customers && bill.items) {
         bill.items.forEach(item => {
           billCommission += item.commissionAmount || 0;
@@ -251,8 +245,14 @@ export default function AnalyticsScreen() {
       productSales,
       monthlyRevenue,
       customerStats,
-      employeeStats // Renamed from dealerStats to employeeStats
+      employeeStats
     };
+  };
+
+  // Helper function to truncate long product names
+  const truncateProductName = (name, maxLength) => {
+    if (name.length <= maxLength) return name;
+    return name.substring(0, maxLength) + '...';
   };
 
   const getColorByIndex = (index) => {
@@ -323,21 +323,27 @@ export default function AnalyticsScreen() {
           />
         </View>
 
+        {/* Fixed Pie Chart Section */}
         <View style={styles.chartContainer}>
           <Text style={styles.chartTitle}>Product Sales</Text>
           {analyticsData.productSales.length > 0 ? (
-            <PieChart
-              data={analyticsData.productSales}
-              width={width - 48}
-              height={220}
-              chartConfig={{
-                color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-              }}
-              accessor="quantity"
-              backgroundColor="transparent"
-              paddingLeft="15"
-              absolute
-            />
+            <View style={styles.pieChartWrapper}>
+              <PieChart
+                data={analyticsData.productSales}
+                width={width - 48}
+                height={220}
+                chartConfig={{
+                  color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                }}
+                accessor="quantity"
+                backgroundColor="transparent"
+                paddingLeft="15"
+                absolute
+                hasLegend={true}
+              />
+              {/* Additional legend for better readability */}
+              
+            </View>
           ) : (
             <View style={styles.chartPlaceholder}>
               <Icon name="chart-pie" size={48} color="#d1d5db" />
@@ -449,12 +455,10 @@ export default function AnalyticsScreen() {
   );
 }
 
-// Styles remain exactly the same as your original
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f8fafc",
-    marginTop: 40,
   },
   scrollContent: {
     padding: 16,
@@ -513,6 +517,33 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  pieChartWrapper: {
+    alignItems: 'center',
+  },
+  legendContainer: {
+    marginTop: 10,
+    width: '100%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '48%',
+    marginBottom: 8,
+  },
+  legendColor: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 6,
+  },
+  legendText: {
+    fontSize: 10,
+    color: '#374151',
+    flex: 1,
   },
   chartHeader: {
     flexDirection: "row",
@@ -582,11 +613,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
-  },
-  rankText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#374151",
   },
   itemInfo: {
     flex: 1,
