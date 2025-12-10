@@ -29,12 +29,13 @@ export default function BillingScreen({ route, navigation }) {
   const employeeFromParams = route.params;
   const [employeeId, setEmployeeId] = useState(employeeFromParams?.employeeId || "");
   const [employeeName, setEmployeeName] = useState(employeeFromParams?.employeeName || "");
+  const [dealerName, setDealerName] = useState(employeeFromParams?.dealerName || "");
 
   // Multi-customer state
   const [customers, setCustomers] = useState(() => [
     { 
       id: 1, 
-      customerName: "", 
+      customerName: dealerName, 
       items: [],
       subtotal: 0 
     }
@@ -278,7 +279,7 @@ export default function BillingScreen({ route, navigation }) {
             text: "OK", 
             onPress: () => {
               // Reset form
-              setCustomers([{ id: 1, customerName: "", items: [], subtotal: 0 }]);
+              setCustomers([{ id: 1, customerName: dealerName, items: [], subtotal: 0 }]);
               setCurrentCustomerIndex(0);
               setNotes("");
               if (!employeeFromParams) {
@@ -417,12 +418,14 @@ export default function BillingScreen({ route, navigation }) {
                     <Text style={styles.employeeNameText}>{employeeName}</Text>
                     <Text style={styles.employeeStatus}>Locked For This Transaction</Text>
                   </View>
+                  {/*
                   <TouchableOpacity 
                     style={styles.changeEmployeeButton}
                     onPress={handleSelectEmployee}
                   >
                     <Text style={styles.changeEmployeeText}>Change</Text>
                   </TouchableOpacity>
+                  */}
                 </View>
               </View>
             ) : (
@@ -446,381 +449,382 @@ export default function BillingScreen({ route, navigation }) {
             )}
           </View>
 
-          {/* Customer Management - REDESIGNED */}
           <View style={styles.section}>
-            {/* Section Header */}
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleRow}>
-                <View style={styles.titleIconContainer}>
-                  <Icon name="account-multiple" size={20} color="#16a34a" />
-                </View>
-                <View style={styles.titleContent}>
-                  <Text style={styles.sectionTitle}>Customer Invoice</Text>
-                  <Text style={styles.sectionSubtitle}>Handling {safeCustomers.length} customer</Text>
-                </View>
-              </View>
-              <TouchableOpacity 
-                style={[styles.addCustomerButton, !employeeId && styles.addCustomerButtonDisabled]}
-                onPress={addNewCustomer}
-                disabled={!employeeId}
-              >
-                <Icon name="plus" size={16} color="#fff" />
-                <Text style={styles.addCustomerText}>Add</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Customer Tabs - FIXED LAYOUT */}
-            <View style={styles.customerTabsWrapper}>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.customerTabsContent}
-              >
-                {safeCustomers.map((customer, index) => (
-                  <View key={customer.id} style={styles.customerTabContainer}>
-                    <TouchableOpacity
-                      style={[
-                        styles.customerTab,
-                        currentCustomerIndex === index && styles.customerTabActive
-                      ]}
-                      onPress={() => setCurrentCustomerIndex(index)}
-                    >
-                      <View style={styles.customerTabIcon}>
-                        <Icon 
-                          name="account" 
-                          size={16} 
-                          color={currentCustomerIndex === index ? "#fff" : "#16a34a"} 
-                        />
-                      </View>
-                      <Text 
-                        style={[
-                          styles.customerTabText,
-                          currentCustomerIndex === index && styles.customerTabTextActive
-                        ]}
-                        numberOfLines={1}
-                        ellipsizeMode="tail"
-                      >
-                        {customer.customerName ? truncateName(customer.customerName) : `Customer ${index + 1}`}
-                      </Text>
-                      {(customer.items || []).length > 0 && (
-                        <View style={[
-                          styles.customerItemCount,
-                          currentCustomerIndex === index && styles.customerItemCountActive
-                        ]}>
-                          <Text style={[
-                            styles.customerItemCountText,
-                            currentCustomerIndex === index && styles.customerItemCountTextActive
-                          ]}>
-                            {customer.items.length}
-                          </Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                    
-                    {/* Remove Button - Only show if more than 1 customer */}
-                    {safeCustomers.length > 1 && (
-                      <TouchableOpacity 
-                        style={styles.removeTabButton}
-                        onPress={() => removeCustomer(index)}
-                      >
-                        <Icon name="close" size={14} color="#94a3b8" />
-                      </TouchableOpacity>
-                    )}
+            {/* Customer Management - REDESIGNED */}
+              {/* Section Header */}
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleRow}>
+                  <View style={styles.titleIconContainer}>
+                    <Icon name="account-multiple" size={20} color="#16a34a" />
                   </View>
-                ))}
-              </ScrollView>
-            </View>
-
-            {/* Current Customer Form */}
-            <View style={styles.customerForm}>
-              <View style={styles.formHeader}>
-                <Text style={styles.currentCustomerLabel}>
-                  {currentCustomer.customerName ? truncateName(currentCustomer.customerName, 25) : `Customer ${currentCustomerIndex + 1}`} Details
-                </Text>
-                <View style={styles.customerSubtotal}>
-                  <Text style={styles.customerSubtotalLabel}>Subtotal</Text>
-                  <Text style={styles.customerSubtotalAmount}>
-                    ₹{Number(currentCustomer.subtotal || 0).toLocaleString('en-IN')}
-                  </Text>
+                  <View style={styles.titleContent}>
+                    <Text style={styles.sectionTitle}>Customer Invoice</Text>
+                  </View>
                 </View>
+                {/*
+                <TouchableOpacity 
+                  style={[styles.addCustomerButton, !employeeId && styles.addCustomerButtonDisabled]}
+                  onPress={addNewCustomer}
+                  disabled={!employeeId}
+                >
+                  <Icon name="plus" size={16} color="#fff" />
+                  <Text style={styles.addCustomerText}>Add</Text>
+                </TouchableOpacity>
+                */}
               </View>
 
+              {/* Customer Tabs - FIXED LAYOUT */}
+              <View style={styles.customerTabsWrapper}>
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.customerTabsContent}
+                >
+                  {safeCustomers.map((customer, index) => (
+                    <View key={customer.id} style={styles.customerTabContainer}>
+                      <TouchableOpacity
+                        style={[
+                          styles.customerTab,
+                          currentCustomerIndex === index && styles.customerTabActive
+                        ]}
+                        onPress={() => setCurrentCustomerIndex(index)}
+                      >
+                        <View style={styles.customerTabIcon}>
+                          <Icon 
+                            name="account" 
+                            size={16} 
+                            color={currentCustomerIndex === index ? "#fff" : "#16a34a"} 
+                          />
+                        </View>
+                        <Text 
+                          style={[
+                            styles.customerTabText,
+                            currentCustomerIndex === index && styles.customerTabTextActive
+                          ]}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                        >
+                          {customer.customerName ? truncateName(customer.customerName) : `Customer ${index + 1}`}
+                        </Text>
+                        {(customer.items || []).length > 0 && (
+                          <View style={[
+                            styles.customerItemCount,
+                            currentCustomerIndex === index && styles.customerItemCountActive
+                          ]}>
+                            <Text style={[
+                              styles.customerItemCountText,
+                              currentCustomerIndex === index && styles.customerItemCountTextActive
+                            ]}>
+                              {customer.items.length}
+                            </Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                      
+                      {/* Remove Button - Only show if more than 1 customer */}
+                      {safeCustomers.length > 1 && (
+                        <TouchableOpacity 
+                          style={styles.removeTabButton}
+                          onPress={() => removeCustomer(index)}
+                        >
+                          <Icon name="close" size={14} color="#94a3b8" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Current Customer Form */}
               {/* Customer Name Input */}
               <View style={styles.inputCard}>
-                <View style={styles.inputHeader}>
-                  <Text style={styles.inputLabel}>Customer Name</Text>
-                  <Text style={styles.requiredBadge}>Required</Text>
-                </View>
-                <View style={styles.inputField}>
-                  <Icon name="account-outline" size={18} color="#64748b" style={styles.fieldIcon} />
-                  <TextInput 
-                    value={currentCustomer.customerName} 
-                    onChangeText={(text) => updateCustomerName(currentCustomerIndex, text)} 
-                    style={styles.nameInput} 
-                    placeholder="Enter Customer Name"
-                    placeholderTextColor="#94a3b8"
-                  />
-                  {currentCustomer.customerName ? (
-                    <Icon name="check-circle" size={18} color="#16a34a" />
-                  ) : (
-                    <Icon name="alert-circle-outline" size={18} color="#f59e0b" />
-                  )}
-                </View>
+                  <View style={styles.inputHeader}>
+                    <Text style={styles.inputLabel}>Customer Name</Text>
+                    <Text style={styles.requiredBadge}>*</Text>
+                  </View>
+                  <View style={styles.inputField}>
+                    <Icon name="account-outline" size={18} color="#64748b" style={styles.fieldIcon} />
+                    <TextInput 
+                      value={currentCustomer.customerName} 
+                      onChangeText={(text) => updateCustomerName(currentCustomerIndex, text)} 
+                      style={styles.nameInput} 
+                      placeholder="Enter Customer Name"
+                      placeholderTextColor="#94a3b8"
+                    />
+                    {currentCustomer.customerName ? (
+                      <Icon name="check-circle" size={18} color="#16a34a" />
+                    ) : (
+                      <Icon name="alert-circle-outline" size={18} color="#f59e0b" />
+                    )}
+                  </View>
               </View>
-            </View>
-          </View>
 
-          {/* Add Items to Current Customer */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleRow}>
-                <View style={styles.titleIconContainer}>
-                  <Icon name="cart-plus" size={20} color="#16a34a" />
+            <View style={{ height: 20 }} />
+
+            {/* Add Items to Current Customer */}
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleRow}>
+                  {/*
+                  <View style={styles.titleIconContainer}>
+                    <Icon name="cart-plus" size={20} color="#16a34a" />
+                  </View>
+                  */}
+                  <View style={styles.titleContent}>
+                    <Text style={styles.sectionTitle}>Add Items</Text>
+                    {/*
+                    <Text style={styles.sectionSubtitle}>
+                      Adding to {currentCustomer.customerName ? truncateName(currentCustomer.customerName, 20) : `Customer ${currentCustomerIndex + 1}`}
+                    </Text>
+                    */}
+                  </View>
                 </View>
-                <View style={styles.titleContent}>
-                  <Text style={styles.sectionTitle}>Add Items</Text>
-                  <Text style={styles.sectionSubtitle}>
-                    Adding to {currentCustomer.customerName ? truncateName(currentCustomer.customerName, 20) : `Customer ${currentCustomerIndex + 1}`}
-                  </Text>
-                </View>
-              </View>
-              {(currentCustomer.items || []).length > 0 && (
-                <View style={styles.customerSubtotalBadge}>
-                  <Text style={styles.customerSubtotalText}>
-                    ₹{Number(currentCustomer.subtotal || 0).toLocaleString('en-IN')}
-                  </Text>
-                </View>
-              )}
-            </View>
-            
-            {/* Product Selection */}
-            <View style={styles.inputGroup}>
-              <View style={styles.labelContainer}>
-                <Text style={styles.label}>
-                  Select Product
-                </Text>
-                <Text style={styles.required}>* Required</Text>
+                {/*
+                {(currentCustomer.items || []).length > 0 && (
+                  <View style={styles.customerSubtotalBadge}>
+                    <Text style={styles.customerSubtotalText}>
+                      ₹{Number(currentCustomer.subtotal || 0).toLocaleString('en-IN')}
+                    </Text>
+                  </View>
+                )}
+                */}
               </View>
               
-              <TouchableOpacity 
-                style={[
-                  styles.dropdownTrigger,
-                  !employeeId && styles.dropdownTriggerDisabled
-                ]}
-                onPress={() => setShowProductDropdown(!showProductDropdown)}
-                disabled={!employeeId}
-              >
-                <View style={styles.dropdownTriggerContent}>
-                  {selectedProduct ? (
-                    <View style={styles.selectedProductInfo}>
-                      <Text style={styles.selectedProductName}>{selectedProduct.name}</Text>
-                      <View style={styles.selectedProductDetails}>
-                        <View style={styles.productDetailItem}>
-                          <Icon name="package-variant" size={12} color="#64748b" />
-                          <Text style={styles.productDetailText}>
-                            Stock: {selectedProduct.quantity} bags
-                          </Text>
-                        </View>
-                        <View style={styles.productDetailItem}>
-                          <Icon name="currency-inr" size={12} color="#64748b" />
-                          <Text style={styles.productDetailText}>
-                            ₹{Number(selectedProduct.rate).toLocaleString('en-IN')}
-                          </Text>
+              {/* Product Selection */}
+              <View style={styles.inputGroup}>
+                <View style={styles.labelContainer}>
+                  <Text style={styles.label}>
+                    Select Product
+                  </Text>
+                  <Text style={styles.required}>*</Text>
+                </View>
+                
+                <TouchableOpacity 
+                  style={[
+                    styles.dropdownTrigger,
+                    !employeeId && styles.dropdownTriggerDisabled
+                  ]}
+                  onPress={() => setShowProductDropdown(!showProductDropdown)}
+                  disabled={!employeeId}
+                >
+                  <View style={styles.dropdownTriggerContent}>
+                    {selectedProduct ? (
+                      <View style={styles.selectedProductInfo}>
+                        <Text style={styles.selectedProductName}>{selectedProduct.name}</Text>
+                        <View style={styles.selectedProductDetails}>
+                          <View style={styles.productDetailItem}>
+                            <Icon name="package-variant" size={12} color="#64748b" />
+                            <Text style={styles.productDetailText}>
+                              Stock: {selectedProduct.quantity} bags
+                            </Text>
+                          </View>
+                          <View style={styles.productDetailItem}>
+                            <Icon name="currency-inr" size={12} color="#64748b" />
+                            <Text style={styles.productDetailText}>
+                              ₹{Number(selectedProduct.rate).toLocaleString('en-IN')}
+                            </Text>
+                          </View>
                         </View>
                       </View>
-                    </View>
-                  ) : (
-                    <Text style={[
-                      styles.dropdownPlaceholder,
-                      !employeeId && styles.disabledText
+                    ) : (
+                      <Text style={[
+                        styles.dropdownPlaceholder,
+                        !employeeId && styles.disabledText
+                      ]}>
+                        {employeeId ? "Tap to select product" : "Select employee first"}
+                      </Text>
+                    )}
+                    <View style={[
+                      styles.dropdownIcon,
+                      showProductDropdown && styles.dropdownIconActive
                     ]}>
-                      {employeeId ? "Tap to select product" : "Select employee first"}
+                      <Icon 
+                        name={showProductDropdown ? "chevron-up" : "chevron-down"} 
+                        size={20} 
+                        color={employeeId ? "#64748b" : "#cbd5e1"} 
+                      />
+                    </View>
+                  </View>
+                </TouchableOpacity>
+
+                <Modal
+                  visible={showProductDropdown}
+                  transparent={true}
+                  animationType="fade"
+                  onRequestClose={() => setShowProductDropdown(false)}
+                >
+                  <TouchableOpacity 
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setShowProductDropdown(false)}
+                  >
+                    <View style={styles.dropdownContainer}>
+                      <View style={styles.dropdownHeader}>
+                        <Text style={styles.dropdownTitle}>Select Product</Text>
+                        <Text style={styles.dropdownSubtitle}>Available products in inventory</Text>
+                      </View>
+                      
+                      {loading ? (
+                        <View style={styles.dropdownLoading}>
+                          <ActivityIndicator size="small" color="#16a34a" />
+                          <Text style={styles.loadingText}>Loading products...</Text>
+                        </View>
+                      ) : products.length === 0 ? (
+                        <View style={styles.noProducts}>
+                          <Icon name="package-variant-closed" size={48} color="#cbd5e1" />
+                          <Text style={styles.noProductsText}>No products available</Text>
+                          <Text style={styles.noProductsSubtext}>Add products in inventory first</Text>
+                        </View>
+                      ) : (
+                        <FlatList
+                          data={products}
+                          keyExtractor={(item) => item._id}
+                          renderItem={({ item }) => (
+                            <TouchableOpacity
+                              style={[
+                                styles.dropdownItem,
+                                selectedProductId === item._id && styles.dropdownItemSelected
+                              ]}
+                              onPress={() => handleProductSelect(item)}
+                            >
+                              <View style={styles.dropdownItemContent}>
+                                <Text style={styles.dropdownItemName}>{item.name}</Text>
+                                <View style={styles.dropdownItemMeta}>
+                                  <View style={styles.metaItem}>
+                                    <Icon name="package-variant" size={12} color="#64748b" />
+                                    <Text style={styles.metaText}>{item.quantity} bags</Text>
+                                  </View>
+                                  <View style={styles.metaItem}>
+                                    <Icon name="currency-inr" size={12} color="#64748b" />
+                                    <Text style={styles.metaText}>{Number(item.rate).toLocaleString('en-IN')}</Text>
+                                  </View>
+                                  {item.commissionPercent && (
+                                    <View style={styles.metaItem}>
+                                      <Icon name="percent" size={12} color="#64748b" />
+                                      <Text style={styles.metaText}>{item.commissionPercent}%</Text>
+                                    </View>
+                                  )}
+                                </View>
+                              </View>
+                              {selectedProductId === item._id && (
+                                <View style={styles.selectedIndicator}>
+                                  <Icon name="check-circle" size={20} color="#16a34a" />
+                                </View>
+                              )}
+                            </TouchableOpacity>
+                          )}
+                          showsVerticalScrollIndicator={false}
+                          style={styles.dropdownList}
+                        />
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                </Modal>
+              </View>
+
+              <View style={styles.row}>
+                <View style={styles.halfInput}>
+                  <View style={styles.labelContainer}>
+                    <Text style={styles.label}>
+                      Quantity (bags)
                     </Text>
-                  )}
-                  <View style={[
-                    styles.dropdownIcon,
-                    showProductDropdown && styles.dropdownIconActive
-                  ]}>
-                    <Icon 
-                      name={showProductDropdown ? "chevron-up" : "chevron-down"} 
-                      size={20} 
-                      color={employeeId ? "#64748b" : "#cbd5e1"} 
+                    <Text style={styles.required}>*</Text>
+                  </View>
+                  <View style={styles.inputWrapper}>
+                    {/*
+                    <Icon name="numeric" size={16} color="#64748b" style={styles.inputIcon} />
+                    */}
+                    <TextInput 
+                      keyboardType="numeric" 
+                      value={qty} 
+                      onChangeText={setQty} 
+                      style={styles.input} 
+                      placeholder="NO."
+                      placeholderTextColor="#94a3b8"
+                      editable={!!employeeId}
+                    />
+                    {/*
+                    <Text style={styles.quantityUnit}>bags</Text>
+                    */}
+                  </View>
+                </View>
+
+                <View style={styles.halfInput}>
+                  <Text style={styles.label}>Commission Rate %</Text>
+                  <View style={styles.inputWrapper}>
+                    {/*
+                    <Icon name="percent" size={16} color="#64748b" style={styles.inputIcon} />
+                    */}
+                    <TextInput 
+                      keyboardType="numeric" 
+                      value={commissionPercent} 
+                      onChangeText={setCommissionPercent} 
+                      style={styles.input} 
+                      placeholder={selectedProduct ? `Default: ${selectedProduct.commissionPercent || 3}%` : "Default %"}
+                      placeholderTextColor="#94a3b8"
+                      editable={!!employeeId}
                     />
                   </View>
                 </View>
+              </View>
+
+              <TouchableOpacity 
+                onPress={addToCurrentCustomer} 
+                style={[
+                  styles.addToBillButton,
+                  (!selectedProductId || !qty || !employeeId) && styles.addToBillButtonDisabled
+                ]}
+                disabled={!selectedProductId || !qty || !employeeId}
+              >
+                <View style={styles.addToBillContent}>
+                  <Icon name="plus-circle" size={18} color="#fff" />
+                  <Text style={styles.addToBillText}>
+                    Add to {currentCustomer.customerName ? truncateName(currentCustomer.customerName, 20) : `Customer ${currentCustomerIndex + 1}`}
+                  </Text>
+                </View>
               </TouchableOpacity>
 
-              <Modal
-                visible={showProductDropdown}
-                transparent={true}
-                animationType="fade"
-                onRequestClose={() => setShowProductDropdown(false)}
-              >
-                <TouchableOpacity 
-                  style={styles.modalOverlay}
-                  activeOpacity={1}
-                  onPress={() => setShowProductDropdown(false)}
-                >
-                  <View style={styles.dropdownContainer}>
-                    <View style={styles.dropdownHeader}>
-                      <Text style={styles.dropdownTitle}>Select Product</Text>
-                      <Text style={styles.dropdownSubtitle}>Available products in inventory</Text>
-                    </View>
-                    
-                    {loading ? (
-                      <View style={styles.dropdownLoading}>
-                        <ActivityIndicator size="small" color="#16a34a" />
-                        <Text style={styles.loadingText}>Loading products...</Text>
-                      </View>
-                    ) : products.length === 0 ? (
-                      <View style={styles.noProducts}>
-                        <Icon name="package-variant-closed" size={48} color="#cbd5e1" />
-                        <Text style={styles.noProductsText}>No products available</Text>
-                        <Text style={styles.noProductsSubtext}>Add products in inventory first</Text>
-                      </View>
-                    ) : (
-                      <FlatList
-                        data={products}
-                        keyExtractor={(item) => item._id}
-                        renderItem={({ item }) => (
-                          <TouchableOpacity
-                            style={[
-                              styles.dropdownItem,
-                              selectedProductId === item._id && styles.dropdownItemSelected
-                            ]}
-                            onPress={() => handleProductSelect(item)}
-                          >
-                            <View style={styles.dropdownItemContent}>
-                              <Text style={styles.dropdownItemName}>{item.name}</Text>
-                              <View style={styles.dropdownItemMeta}>
-                                <View style={styles.metaItem}>
-                                  <Icon name="package-variant" size={12} color="#64748b" />
-                                  <Text style={styles.metaText}>{item.quantity} bags</Text>
-                                </View>
-                                <View style={styles.metaItem}>
-                                  <Icon name="currency-inr" size={12} color="#64748b" />
-                                  <Text style={styles.metaText}>{Number(item.rate).toLocaleString('en-IN')}</Text>
-                                </View>
-                                {item.commissionPercent && (
-                                  <View style={styles.metaItem}>
-                                    <Icon name="percent" size={12} color="#64748b" />
-                                    <Text style={styles.metaText}>{item.commissionPercent}%</Text>
-                                  </View>
-                                )}
-                              </View>
-                            </View>
-                            {selectedProductId === item._id && (
-                              <View style={styles.selectedIndicator}>
-                                <Icon name="check-circle" size={20} color="#16a34a" />
-                              </View>
-                            )}
-                          </TouchableOpacity>
-                        )}
-                        showsVerticalScrollIndicator={false}
-                        style={styles.dropdownList}
-                      />
-                    )}
+            
+            <View style={{ height: 60 }} />
+            
+            
+            {/* Current Customer's Items */}
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleRow}>
+                  <View style={styles.titleIconContainer}>
+                    <Icon name="format-list-bulleted" size={20} color="#16a34a" />
                   </View>
-                </TouchableOpacity>
-              </Modal>
-            </View>
-
-            <View style={styles.row}>
-              <View style={styles.halfInput}>
-                <View style={styles.labelContainer}>
-                  <Text style={styles.label}>
-                    Quantity
-                  </Text>
-                  <Text style={styles.required}>* Required</Text>
+                  <View style={styles.titleContent}>
+                    <Text style={styles.sectionTitle}>
+                      {currentCustomer.customerName ? truncateName(currentCustomer.customerName, 25) : `Customer ${currentCustomerIndex + 1}`}'s Items
+                    </Text>
+                    <Text style={styles.sectionSubtitle}>
+                      {(currentCustomer.items || []).length} item{(currentCustomer.items || []).length !== 1 ? 's' : ''} • 
+                      Subtotal: ₹{Number(currentCustomer.subtotal || 0).toLocaleString('en-IN')}
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.inputWrapper}>
-                  <Icon name="numeric" size={16} color="#64748b" style={styles.inputIcon} />
-                  <TextInput 
-                    keyboardType="numeric" 
-                    value={qty} 
-                    onChangeText={setQty} 
-                    style={styles.input} 
-                    placeholder="NO."
-                    placeholderTextColor="#94a3b8"
-                    editable={!!employeeId}
-                  />
-                  <Text style={styles.quantityUnit}>bags</Text>
-                </View>
+                {(currentCustomer.items || []).length > 0 && (
+                  <View style={styles.customerItemsBadge}>
+                    <Text style={styles.customerItemsCount}>{(currentCustomer.items || []).length}</Text>
+                  </View>
+                )}
               </View>
 
-              <View style={styles.halfInput}>
-                <Text style={styles.label}>Commission Rate %</Text>
-                <View style={styles.inputWrapper}>
-                  <Icon name="percent" size={16} color="#64748b" style={styles.inputIcon} />
-                  <TextInput 
-                    keyboardType="numeric" 
-                    value={commissionPercent} 
-                    onChangeText={setCommissionPercent} 
-                    style={styles.input} 
-                    placeholder={selectedProduct ? `Default: ${selectedProduct.commissionPercent || 3}%` : "Default %"}
-                    placeholderTextColor="#94a3b8"
-                    editable={!!employeeId}
-                  />
-                </View>
-              </View>
-            </View>
-
-            <TouchableOpacity 
-              onPress={addToCurrentCustomer} 
-              style={[
-                styles.addToBillButton,
-                (!selectedProductId || !qty || !employeeId) && styles.addToBillButtonDisabled
-              ]}
-              disabled={!selectedProductId || !qty || !employeeId}
-            >
-              <View style={styles.addToBillContent}>
-                <Icon name="plus-circle" size={18} color="#fff" />
-                <Text style={styles.addToBillText}>
-                  Add to {currentCustomer.customerName ? truncateName(currentCustomer.customerName, 20) : `Customer ${currentCustomerIndex + 1}`}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-
-          {/* Current Customer's Items */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleRow}>
-                <View style={styles.titleIconContainer}>
-                  <Icon name="format-list-bulleted" size={20} color="#16a34a" />
-                </View>
-                <View style={styles.titleContent}>
-                  <Text style={styles.sectionTitle}>
-                    {currentCustomer.customerName ? truncateName(currentCustomer.customerName, 25) : `Customer ${currentCustomerIndex + 1}`}'s Items
-                  </Text>
-                  <Text style={styles.sectionSubtitle}>
-                    {(currentCustomer.items || []).length} item{(currentCustomer.items || []).length !== 1 ? 's' : ''} • 
-                    Subtotal: ₹{Number(currentCustomer.subtotal || 0).toLocaleString('en-IN')}
+              {(currentCustomer.items || []).length === 0 ? (
+                <View style={styles.emptyState}>
+                  <View style={styles.emptyIcon}>
+                    <Icon name="cart-outline" size={56} color="#e2e8f0" />
+                  </View>
+                  <Text style={styles.emptyText}>No items added yet</Text>
+                  <Text style={styles.emptySubtext}>
+                    Add products to {currentCustomer.customerName ? truncateName(currentCustomer.customerName, 20) : 'this customer'}
                   </Text>
                 </View>
-              </View>
-              {(currentCustomer.items || []).length > 0 && (
-                <View style={styles.customerItemsBadge}>
-                  <Text style={styles.customerItemsCount}>{(currentCustomer.items || []).length}</Text>
+              ) : (
+                <View style={styles.itemsList}>
+                  {(currentCustomer.items || []).map(renderItemRow)}
                 </View>
               )}
-            </View>
-
-            {(currentCustomer.items || []).length === 0 ? (
-              <View style={styles.emptyState}>
-                <View style={styles.emptyIcon}>
-                  <Icon name="cart-outline" size={56} color="#e2e8f0" />
-                </View>
-                <Text style={styles.emptyText}>No items added yet</Text>
-                <Text style={styles.emptySubtext}>
-                  Add products to {currentCustomer.customerName ? truncateName(currentCustomer.customerName, 20) : 'this customer'}
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.itemsList}>
-                {(currentCustomer.items || []).map(renderItemRow)}
-              </View>
-            )}
           </View>
 
           {/* Notes Section */}

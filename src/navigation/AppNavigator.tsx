@@ -12,6 +12,7 @@ import ReportsScreen from "../screens/ReportsScreen";
 import AnalyticsScreen from "../screens/AnalyticsScreen";
 import TransactionDetailScreen from "../screens/TransactionDetailScreen";
 import EmployeesScreen from "../screens/EmployeesScreen";
+import DealerScreen from "../screens/DealerScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -50,6 +51,10 @@ export default function AppNavigator() {
             <Stack.Screen 
               name="Billing" 
               component={BillingScreen} 
+            />
+            <Stack.Screen 
+              name="Dealers" 
+              component={DealerScreen} 
             />
             <Stack.Screen 
               name="Reports" 

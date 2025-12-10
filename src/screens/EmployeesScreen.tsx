@@ -161,6 +161,13 @@ export default function EmployeesScreen({ navigation }) {
     });
   };
 
+  const handleOpenDealers = (employee) => {
+    navigation.navigate("Dealers", {
+      employeeId: employee._id,
+      employeeName: employee.name,
+    });
+  };
+
   const EmployeeCard = ({ employee }) => (
     <View style={styles.employeeCard}>
       <View style={styles.employeeMain}>
@@ -179,10 +186,9 @@ export default function EmployeesScreen({ navigation }) {
       <View style={styles.employeeActions}>
         <TouchableOpacity 
           style={styles.invoiceButton}
-          onPress={() => handleCreateInvoice(employee)}
+          onPress={() => handleOpenDealers(employee)}
         >
-          <Icon name="currency-inr" size={16} color="#fff" />
-          <Text style={styles.invoiceButtonText}>Invoice</Text>
+          <Text style={styles.invoiceButtonText}>Dealers</Text>
         </TouchableOpacity>
         
         <View style={styles.actionButtons}>
