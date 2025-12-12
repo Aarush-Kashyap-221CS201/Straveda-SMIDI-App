@@ -8,7 +8,6 @@ import {
   StyleSheet,
   Alert,
   Linking,
-  Share
 } from "react-native";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import Header from "../components/Header";
@@ -19,12 +18,12 @@ import api from "../api/client";
 import RNFS from "react-native-fs";
 import FileViewer from "react-native-file-viewer";
 import { PermissionsAndroid, Platform } from "react-native";
+import  shareSingle  from "react-native-share";
 
 export default function TransactionDetailScreen() {
   const route = useRoute();
   const navigation = useNavigation();
   const { transaction } = route.params;
-  console.log(transaction);
 
   const handleDownloadPDF = async () => {
     {/*
@@ -44,7 +43,7 @@ export default function TransactionDetailScreen() {
     }
     */}
 
-    {/*
+    
     const pdfUrl = `${api.defaults.baseURL}/api/bills/${transaction._id}/pdf`
     const openendUrl = "https://docs.google.com/viewer?url=" + encodeURIComponent(pdfUrl)
 
@@ -52,39 +51,48 @@ export default function TransactionDetailScreen() {
     console.log(openendUrl);
 
     Linking.openURL(openendUrl);
-    */}
-
+    
+    {/*
     try {
       const pdfUrl = `${api.defaults.baseURL}/api/bills/${transaction._id}/pdf`;
       const fileName = `bill_${transaction._id}.pdf`;
+      const filePath = `${RNFS.ExternalCachesDirectoryPath}/${fileName}`;
 
-      // Save inside app's private files (always allowed, no permission needed)
-      const filePath = `${RNFS.DocumentDirectoryPath}/${fileName}`;
+      console.log("Downloading from:", pdfUrl);
+      console.log("Saving to:", filePath);
 
-      const download = RNFS.downloadFile({
+      const result = await RNFS.downloadFile({
         fromUrl: pdfUrl,
         toFile: filePath,
+      }).promise;
+
+      console.log("Download result:", result);
+
+      if (result.statusCode !== 200) return Alert.alert("Download failed");
+
+      const exists = await RNFS.exists(filePath);
+      console.log("File exists:", exists);
+
+      if (!exists) return Alert.alert("File missing");
+
+      console.log("Opening via FileViewer:", filePath);
+
+      // This now produces content:// URI using FileProvider
+      await FileViewer.open(filePath, {
+        showOpenWithDialog: true, // show app picker
       });
 
-      const result = await download.promise;
+      console.log("PDF opened successfully!");
 
-      if (result.statusCode === 200) {
-        Alert.alert("Success", "PDF downloaded!");
-        console.log("Saved at:", filePath);
-        const exists = await RNFS.exists(filePath);
-        console.log("Exists?", exists);
-        await FileViewer.open(filePath); // Opens in Google Drive / Adobe etc.
-      } else {
-        throw new Error("Download failed");
-      }
-
-    } catch (err) {
-      console.log("PDF download error:", err);
-      Alert.alert("Error", "Failed to download or open PDF");
+    } catch (error) {
+      console.log("PDF open error:", error);
+      Alert.alert("Error", "Could not open PDF");
     }
+    */}
   };
 
   const handleShare = async () => {
+    {/*
     try {
       const pdfUrl = `${api.defaults.baseURL}/api/bills/${transaction._id}/pdf`;
       
@@ -96,6 +104,7 @@ export default function TransactionDetailScreen() {
     } catch (error) {
       console.error("Share Error:", error);
     }
+    */}
   };
 
   // FIXED: Calculate totals for new structure with multiple customers

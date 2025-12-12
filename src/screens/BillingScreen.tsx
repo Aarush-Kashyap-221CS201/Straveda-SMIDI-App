@@ -21,6 +21,7 @@ const { width } = Dimensions.get('window');
 
 export default function BillingScreen({ route, navigation }) {
   const [products, setProducts] = useState([]);
+  const [recentTransactions,setRecentTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
@@ -392,6 +393,56 @@ export default function BillingScreen({ route, navigation }) {
 
   // Safe array for mapping
   const safeCustomers = customers || [];
+
+  const getTransactionsOfCustomer = async () => {
+      try {
+        const name = dealerName;
+        if (!name) {
+          console.log("No customer name found in this transaction.");
+          return;
+        }
+  
+        console.log("Looking for transactions of:", name);
+  
+        // Fetch all bills
+        const response = await api.get("/api/bills");
+        console.log("Recent Transactions API response:", response.data);
+  
+        // Extract list
+        const allBills = response.data?.bills || response.data || [];
+  
+        // 1) Filter bills where FIRST customer matches
+        let matching = allBills.filter(
+          (bill) => bill.customers?.[0]?.customerName === name
+        );
+  
+        console.log("After first-customer filter:", matching.length);
+  
+        // 2) Sort by createdAt DESC
+        matching.sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+  
+        console.log("After sorting:", matching.map(m => m.createdAt));
+  
+        // 3) Take recent 5
+        const recentFive = matching.slice(0, 5);
+  
+        console.log("Recent 5 transactions for", name, ":", recentFive);
+        return recentFive;
+  
+      } catch (err) {
+        console.log("Error fetching matching transactions:", err);
+      }
+  };
+  
+  const loadCustomerHistory = async () => {
+    const history = await getTransactionsOfCustomer();
+    setRecentTransactions(history);
+  };
+
+  loadCustomerHistory();
+
 
   return (
     <View style={styles.container}>
@@ -869,6 +920,63 @@ export default function BillingScreen({ route, navigation }) {
               textAlignVertical="top"
             />
           </View>
+
+          {recentTransactions && recentTransactions.length > 0 && (
+            <View style={styles.section}>
+              
+              {/* Header */}
+              <View style={styles.billingHistoryHeader}>
+                <View style={styles.sectionTitleRow}>
+                  <View style={styles.titleIconContainer}>
+                    <Icon name="history" size={20} color="#16a34a" />
+                  </View>
+                  <View style={styles.titleContent}>
+                    <Text style={styles.sectionTitle}>Billing History</Text>
+                    <Text style={styles.sectionSubtitle}>
+                      Last {recentTransactions.length} transactions
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* List */}
+              {recentTransactions.map((t) => (
+                    <TouchableOpacity 
+                      key={t._id}
+                      style={styles.billingHistoryCard}
+                    >
+                      {/* Left Icon */}
+                      <View style={styles.billingHistoryIcon}>
+                        <Icon name="receipt" size={20} color="#16a34a" />
+                      </View>
+
+                      {/* Main Content */}
+                      <View style={styles.billingHistoryContent}>
+                        <View style={styles.billingHistoryRow}>
+                          <Text style={styles.billingHistoryAmount}>
+                            ₹{Number(t.totalAmount - t.totalCommission).toLocaleString("en-IN")}
+                          </Text>
+                          <Text style={styles.billingHistoryDate}>
+                            {new Date(t.createdAt).toLocaleDateString("en-IN", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric"
+                            })}
+                          </Text>
+                        </View>
+
+                        <Text style={styles.billingHistoryCustomer} numberOfLines={1}>
+                          {t.customers?.map(c => c.customerName).join(", ")}
+                        </Text>
+                      </View>
+
+                      {/* Chevron */}
+                      <Icon name="chevron-right" size={20} color="#cbd5e1" />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
 
           {/* Summary and Save */}
           {safeCustomers.some(customer => (customer?.items || []).length > 0) && (
@@ -1738,4 +1846,65 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontWeight: "700",
   },
+  billingHistoryHeader: {
+    marginBottom: 16,
+  },
+
+  billingHistoryCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+
+  billingHistoryIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#f0fdf4",
+    borderWidth: 2,
+    borderColor: "#dcfce7",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+
+  billingHistoryContent: {
+    flex: 1,
+  },
+
+  billingHistoryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+
+  billingHistoryAmount: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#16a34a",
+  },
+
+  billingHistoryDate: {
+    fontSize: 12,
+    color: "#94a3b8",
+    fontWeight: "500",
+  },
+
+  billingHistoryCustomer: {
+    fontSize: 14,
+    color: "#475569",
+    fontWeight: "500",
+  },
+
 });
