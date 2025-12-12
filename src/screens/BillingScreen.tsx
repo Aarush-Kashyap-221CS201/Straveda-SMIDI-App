@@ -58,6 +58,24 @@ export default function BillingScreen({ route, navigation }) {
     });
   };
 
+  const getCustomerItemsTotal = (customer) =>{
+    const totalCommission =
+      customer.items?.reduce(
+        (sum, item) => sum + (item.commissionAmount || 0),
+        0
+      ) || 0;
+    return customer.subtotal - totalCommission;
+  }
+
+  const getCustomerCommissionTotal = (customer) =>{
+    const totalCommission =
+      customer.items?.reduce(
+        (sum, item) => sum + (item.commissionAmount || 0),
+        0
+      ) || 0;
+    return totalCommission;
+  }
+
   // Safe access to current customer
   const currentCustomer = customers?.[currentCustomerIndex] || { 
     id: 1, 
@@ -303,19 +321,20 @@ export default function BillingScreen({ route, navigation }) {
     try {
       const currentCustomers = customers || [];
       return {
-        totalAmount: currentCustomers.reduce((sum, customer) => sum + (customer?.subtotal || 0), 0) || 0,
+        totalAmount: currentCustomers.reduce((sum, customer) => sum + (getCustomerItemsTotal(customer) || 0), 0) || 0,
         totalItems: currentCustomers.reduce((sum, customer) => 
           sum + ((customer?.items || []).reduce((itemSum, item) => itemSum + (item?.quantity || 0), 0) || 0), 0
         ) || 0,
-        totalCustomers: currentCustomers.length || 0
+        totalCustomers: currentCustomers.length || 0,
+        totalCommission: currentCustomers.reduce((sum, customer) => sum + (getCustomerCommissionTotal(customer) || 0), 0) || 0
       };
     } catch (error) {
       console.error('Calculation error:', error);
-      return { totalAmount: 0, totalItems: 0, totalCustomers: 0 };
+      return { totalAmount: 0, totalItems: 0, totalCustomers: 0, totalCommission: 0 };
     }
   };
 
-  const { totalAmount, totalItems, totalCustomers } = getCalculations();
+  const { totalAmount, totalItems, totalCustomers, totalCommission } = getCalculations();
 
   const selectedProduct = products.find(p => p._id === selectedProductId);
 
@@ -359,7 +378,7 @@ export default function BillingScreen({ route, navigation }) {
           </View>
         </View>
         <View style={styles.itemActions}>
-          <Text style={styles.itemTotal}>₹{item.lineTotal}</Text>
+          <Text style={styles.itemTotal}>₹{item.itemAmount}</Text>
           <TouchableOpacity 
             style={styles.removeItemButton}
             onPress={() => removeItemFromCurrentCustomer(index)}
@@ -799,7 +818,7 @@ export default function BillingScreen({ route, navigation }) {
                     </Text>
                     <Text style={styles.sectionSubtitle}>
                       {(currentCustomer.items || []).length} item{(currentCustomer.items || []).length !== 1 ? 's' : ''} • 
-                      Subtotal: ₹{Number(currentCustomer.subtotal || 0).toLocaleString('en-IN')}
+                      Subtotal: ₹{Number(getCustomerItemsTotal(currentCustomer)).toLocaleString('en-IN')}
                     </Text>
                   </View>
                 </View>
@@ -865,13 +884,6 @@ export default function BillingScreen({ route, navigation }) {
                 <View style={styles.summaryGrid}>
                   <View style={styles.summaryItem}>
                     <View style={styles.summaryIconContainer}>
-                      <Icon name="account-multiple" size={16} color="#16a34a" />
-                    </View>
-                    <Text style={styles.summaryLabel}>Customers</Text>
-                    <Text style={styles.summaryValue}>{totalCustomers}</Text>
-                  </View>
-                  <View style={styles.summaryItem}>
-                    <View style={styles.summaryIconContainer}>
                       <Icon name="package-variant" size={16} color="#16a34a" />
                     </View>
                     <Text style={styles.summaryLabel}>Total Items</Text>
@@ -883,6 +895,13 @@ export default function BillingScreen({ route, navigation }) {
                     </View>
                     <Text style={styles.summaryLabel}>Grand Total</Text>
                     <Text style={styles.grandTotal}>₹{Number(totalAmount).toLocaleString('en-IN')}</Text>
+                  </View>
+                  <View style={styles.summaryItem}>
+                    <View style={styles.summaryIconContainer}>
+                      <Icon name="currency-inr" size={16} color="#16a34a" />
+                    </View>
+                    <Text style={styles.summaryLabel}>Total Commission</Text>
+                    <Text style={styles.grandTotal}>₹{Number(totalCommission).toLocaleString('en-IN')}</Text>
                   </View>
                 </View>
                 

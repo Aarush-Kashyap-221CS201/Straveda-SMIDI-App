@@ -17,6 +17,8 @@ import moment from "moment";
 import api from "../api/client";
 
 import RNFS from "react-native-fs";
+import FileViewer from "react-native-file-viewer";
+import { PermissionsAndroid, Platform } from "react-native";
 
 export default function TransactionDetailScreen() {
   const route = useRoute();
@@ -41,6 +43,8 @@ export default function TransactionDetailScreen() {
       Alert.alert("Error", "Failed to download PDF");
     }
     */}
+
+    {/*
     const pdfUrl = `${api.defaults.baseURL}/api/bills/${transaction._id}/pdf`
     const openendUrl = "https://docs.google.com/viewer?url=" + encodeURIComponent(pdfUrl)
 
@@ -48,26 +52,36 @@ export default function TransactionDetailScreen() {
     console.log(openendUrl);
 
     Linking.openURL(openendUrl);
+    */}
 
-    {/*
     try {
       const pdfUrl = `${api.defaults.baseURL}/api/bills/${transaction._id}/pdf`;
+      const fileName = `bill_${transaction._id}.pdf`;
 
-      // 1. Download to temp folder
-      const localPath = RNFS.CachesDirectoryPath + "/bill.pdf";
-      await RNFS.downloadFile({ fromUrl: pdfUrl, toFile: localPath }).promise;
+      // Save inside app's private files (always allowed, no permission needed)
+      const filePath = `${RNFS.DocumentDirectoryPath}/${fileName}`;
 
-      // 2. Share sheet with SAVE options
-      await Share.open({
-        url: "file://" + localPath,
-        type: "application/pdf",
-        showAppsToView: true,
+      const download = RNFS.downloadFile({
+        fromUrl: pdfUrl,
+        toFile: filePath,
       });
-    } catch (e) {
-      console.log(e);
-      Alert.alert("Error", "Failed to download");
+
+      const result = await download.promise;
+
+      if (result.statusCode === 200) {
+        Alert.alert("Success", "PDF downloaded!");
+        console.log("Saved at:", filePath);
+        const exists = await RNFS.exists(filePath);
+        console.log("Exists?", exists);
+        await FileViewer.open(filePath); // Opens in Google Drive / Adobe etc.
+      } else {
+        throw new Error("Download failed");
+      }
+
+    } catch (err) {
+      console.log("PDF download error:", err);
+      Alert.alert("Error", "Failed to download or open PDF");
     }
-    */}
   };
 
   const handleShare = async () => {
