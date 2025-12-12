@@ -10,7 +10,8 @@ import {
   Dimensions,
   Alert,
   Modal,
-  TextInput
+  TextInput,
+  Keyboard
 } from "react-native";
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import api from "../api/client";
@@ -27,6 +28,7 @@ export default function EmployeesScreen({ navigation }) {
   const [employeeName, setEmployeeName] = useState("");
   const [saving, setSaving] = useState(false);
   const [totalTransactions, setTotalTransactions] = useState(0);
+  const [searchText, setSearchText] = useState("");
 
   useEffect(() => { 
     fetchEmployees();
@@ -55,6 +57,10 @@ export default function EmployeesScreen({ navigation }) {
       setLoading(false); 
     }
   }
+
+  const filteredEmployees = employees.filter((e) =>
+    e.name.toLowerCase().startsWith(searchText.toLowerCase())
+  );
 
   async function fetchTransactionCount() {
     try {
@@ -258,11 +264,23 @@ export default function EmployeesScreen({ navigation }) {
           </View>
         </View>
 
+        {/* 🔍 Search Bar */}
+        <TextInput
+          style={styles.searchInput}
+          value={searchText}
+          onChangeText={setSearchText}
+          placeholder="Search employee..."
+          placeholderTextColor="#9ca3af"
+          returnKeyType="done"
+          onSubmitEditing={() => Keyboard.dismiss()}
+        />
+
+
         <View style={styles.employeesSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Employees</Text>
             <Text style={styles.employeeCount}>
-              {employees.length} employee{employees.length !== 1 ? 's' : ''}
+              {filteredEmployees.length} employee{filteredEmployees.length !== 1 ? 's' : ''}
             </Text>
           </View>
 
@@ -270,7 +288,7 @@ export default function EmployeesScreen({ navigation }) {
             <ActivityIndicator size="large" color="#22c55e" style={styles.loader} />
           ) : (
             <FlatList 
-              data={employees}
+              data={filteredEmployees}
               keyExtractor={(item) => item._id}
               renderItem={({ item }) => <EmployeeCard employee={item} />}
               refreshControl={
@@ -374,6 +392,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
+  },
+  searchInput: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    fontSize: 16,
   },
   addButtonContent: {
     flexDirection: "row",

@@ -10,6 +10,7 @@ import {
   Alert,
   Modal,
   TextInput,
+  Keyboard
 } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import Header from "../components/Header";
@@ -25,6 +26,7 @@ export default function DealerScreen({ route, navigation }) {
   const [dealerName, setDealerName] = useState("");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [searchText, setSearchText] = useState("");
 
   useEffect(() => {
     loadDealers();
@@ -51,6 +53,10 @@ export default function DealerScreen({ route, navigation }) {
       setLoading(false);
     }
   };
+
+  const filteredDealers = dealers.filter((d) =>
+    d.name.toLowerCase().startsWith(searchText.toLowerCase())
+  );
 
   // ============================
   // Create / Update dealer
@@ -190,16 +196,27 @@ export default function DealerScreen({ route, navigation }) {
           <Text style={styles.addButtonText}>Add Dealer</Text>
         </TouchableOpacity>
 
+        {/* 🔍 Search Bar */}
+        <TextInput
+          style={styles.searchInput}
+          value={searchText}
+          onChangeText={setSearchText}
+          placeholder="Search dealer..."
+          placeholderTextColor="#9ca3af"
+          returnKeyType="done"
+          onSubmitEditing={() => Keyboard.dismiss()}
+        />
+
         <View style={styles.box}>
           <Text style={styles.sectionTitle}>
-            Dealers ({dealers?.length || 0})
+            Dealers ({filteredDealers?.length || 0})
           </Text>
 
           {loading ? (
             <ActivityIndicator size="large" color="#22c55e" />
           ) : (
             <FlatList
-              data={dealers}
+              data={filteredDealers}
               keyExtractor={(item) => item._id}
               renderItem={({ item }) => <DealerCard dealer={item} />}
               refreshControl={
@@ -212,7 +229,7 @@ export default function DealerScreen({ route, navigation }) {
               ListEmptyComponent={
                 <View style={styles.emptyState}>
                   <Icon name="store-outline" size={64} color="#cbd5e1" />
-                  <Text style={styles.emptyText}>No dealers added</Text>
+                  <Text style={styles.emptyText}>No dealers found</Text>
                 </View>
               }
             />
@@ -277,6 +294,15 @@ export default function DealerScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#f8fafc" },
   content: { flex: 1, padding: 16 },
+  searchInput: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    fontSize: 16,
+  },
   addButton: {
     backgroundColor: "#22c55e",
     flexDirection: "row",
