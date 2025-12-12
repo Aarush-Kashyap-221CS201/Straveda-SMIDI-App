@@ -22,6 +22,7 @@ export default function TransactionDetailScreen() {
   const route = useRoute();
   const navigation = useNavigation();
   const { transaction } = route.params;
+  console.log(transaction);
 
   const handleDownloadPDF = async () => {
     {/*
@@ -123,6 +124,16 @@ export default function TransactionDetailScreen() {
            "Unknown Employee";
   };
 
+  const getCustomerItemsTotal = (customer) =>{
+    const totalCommission =
+      customer.items?.reduce(
+        (sum, item) => sum + (item.commissionAmount || 0),
+        0
+      ) || 0;
+
+    return (customer.subtotal || 0) - totalCommission;
+  }
+
   return (
     <View style={styles.container}>
      >
@@ -147,7 +158,7 @@ export default function TransactionDetailScreen() {
           </View>
           
           <View style={styles.amountSection}>
-            <Text style={styles.amount}>₹{Number(transaction.finalAmount || transaction.totalAmount).toLocaleString()}</Text>
+            <Text style={styles.amount}>₹{Number(transaction.totalAmount - transaction.totalCommission).toLocaleString()}</Text>
             <Text style={styles.amountLabel}>Final Amount</Text>
           </View>
         </View>
@@ -238,7 +249,7 @@ export default function TransactionDetailScreen() {
                   </View>
                   <Text style={styles.customerName}>{customer.customerName}</Text>
                   <Text style={styles.customerSubtotal}>
-                    ₹{Number(customer.subtotal || 0).toLocaleString()}
+                    ₹{Number(getCustomerItemsTotal(customer)).toLocaleString()}
                   </Text>
                 </View>
 
@@ -249,7 +260,7 @@ export default function TransactionDetailScreen() {
                       <View style={styles.itemHeader}>
                         <Text style={styles.itemName}>{item.productName}</Text>
                         <Text style={styles.itemTotal}>
-                          ₹{Number(item.lineTotal || item.itemAmount).toLocaleString()}
+                          ₹{Number(item.itemAmount).toLocaleString()}
                         </Text>
                       </View>
                       
@@ -288,7 +299,7 @@ export default function TransactionDetailScreen() {
                 {/* Customer Summary */}
                 <View style={styles.customerSummary}>
                   <Text style={styles.customerSummaryText}>
-                    {customer.items?.length || 0} items • ₹{Number(customer.subtotal || 0).toLocaleString()}
+                    {customer.items?.length || 0} items • ₹{Number(getCustomerItemsTotal(customer)).toLocaleString()}
                   </Text>
                 </View>
               </View>
@@ -325,12 +336,7 @@ export default function TransactionDetailScreen() {
               </View>
             )}
             
-            <View style={[styles.priceRow, styles.totalRow]}>
-              <Text style={styles.totalLabel}>Final Amount</Text>
-              <Text style={styles.totalValue}>
-                ₹{Number(transaction.finalAmount || transaction.totalAmount).toLocaleString()}
-              </Text>
-            </View>
+            
           </View>
         </View>
 

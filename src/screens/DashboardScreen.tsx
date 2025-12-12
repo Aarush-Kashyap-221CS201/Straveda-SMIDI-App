@@ -401,6 +401,7 @@ export default function DashboardScreen({ navigation }) {
 
           {data.latestTransactions && data.latestTransactions.length > 0 ? (
             data.latestTransactions.map((transaction, index) => (
+              console.log(transaction),
               <TouchableOpacity 
                 key={transaction._id || `transaction-${index}`} 
                 style={styles.transactionCard}
@@ -418,7 +419,7 @@ export default function DashboardScreen({ navigation }) {
                       {transaction.employeeName || "Employee"}
                     </Text>
                     <Text style={styles.transactionAmount}>
-                      ₹{Number(transaction.finalAmount || transaction.totalAmount || transaction.total || transaction.amount || 0).toLocaleString('en-IN')}
+                      ₹{Number(transaction.totalAmount - transaction.totalCommission).toLocaleString('en-IN')}
                     </Text>
                   </View>
                   

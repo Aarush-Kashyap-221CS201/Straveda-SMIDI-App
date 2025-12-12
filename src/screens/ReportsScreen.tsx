@@ -327,7 +327,19 @@ export default function ReportsScreen() {
     const totalItems = transaction.totalItems || transaction.customers?.reduce((sum, cust) => 
       sum + (cust.items?.length || 0), 0) || 0;
     const uniqueCustomers = transaction.customers?.length || 0;
-    const transactionAmount = transaction.finalAmount || transaction.totalAmount || 0;
+    const transactionAmount = transaction.totalAmount - transaction.totalCommission;
+
+    console.log(transaction);
+
+    const getAdjustedSubtotal = (customer) => {
+      const totalCommission =
+        customer.items?.reduce(
+          (sum, item) => sum + (item.commissionAmount || 0),
+          0
+        ) || 0;
+
+      return (customer.subtotal || 0) - totalCommission;
+    };
 
     return (
       <View style={styles.transactionCard}>
@@ -390,7 +402,7 @@ export default function ReportsScreen() {
                   {customer.customerName}
                 </Text>
                 <Text style={styles.customerBreakdownItems}>
-                  {customer.items?.length || 0} items • ₹{Number(customer.subtotal || 0).toLocaleString()}
+                  {customer.items?.length || 0} items • ₹{Number(getAdjustedSubtotal(customer)).toLocaleString()}
                 </Text>
               </View>
             ))}
