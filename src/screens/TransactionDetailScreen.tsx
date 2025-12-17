@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Alert,
   Linking,
+  Platform
 } from "react-native";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import Header from "../components/Header";
@@ -15,10 +16,8 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import moment from "moment";
 import api from "../api/client";
 
-import RNFS from "react-native-fs";
-import FileViewer from "react-native-file-viewer";
-import { PermissionsAndroid, Platform } from "react-native";
-import  shareSingle  from "react-native-share";
+import Share from "react-native-share";
+import ReactNativeBlobUtil from "react-native-blob-util";
 
 export default function TransactionDetailScreen() {
   const route = useRoute();
@@ -43,7 +42,7 @@ export default function TransactionDetailScreen() {
     }
     */}
 
-    
+    {/*    
     const pdfUrl = `${api.defaults.baseURL}/api/bills/${transaction._id}/pdf`
     const openendUrl = "https://docs.google.com/viewer?url=" + encodeURIComponent(pdfUrl)
 
@@ -51,6 +50,7 @@ export default function TransactionDetailScreen() {
     console.log(openendUrl);
 
     Linking.openURL(openendUrl);
+    */}
     
     {/*
     try {
@@ -89,6 +89,32 @@ export default function TransactionDetailScreen() {
       Alert.alert("Error", "Could not open PDF");
     }
     */}
+
+    try {
+      const pdfUrl = `${api.defaults.baseURL}/api/bills/${transaction._id}/pdf`;
+      const fileName = `invoice-${transaction._id}.pdf`;
+      const downloadPath = `/storage/emulated/0/Download/${fileName}`;
+
+      const { fs, android } = ReactNativeBlobUtil;
+
+      const res = await ReactNativeBlobUtil.fetch("GET", pdfUrl);
+      await fs.writeFile(downloadPath, res.base64(), "base64");
+
+      // ✅ Tell Android this is a finished public download
+      android.addCompleteDownload({
+        title: fileName,
+        description: "Invoice PDF",
+        mime: "application/pdf",
+        path: downloadPath,
+        showNotification: true,
+      });
+
+      Alert.alert("Downloaded", "Saved to Downloads");
+
+    } catch (e) {
+      console.error(e);
+      Alert.alert("Error", "PDF download failed");
+    }
   };
 
   const handleShare = async () => {
@@ -105,6 +131,50 @@ export default function TransactionDetailScreen() {
       console.error("Share Error:", error);
     }
     */}
+
+    const fileName = `invoice-${transaction._id}.pdf`;
+    const publicPath = `/storage/emulated/0/Download/${fileName}`;
+    const cachePath = `${ReactNativeBlobUtil.fs.dirs.CacheDir}/${fileName}`;
+
+    try {
+      const { fs } = ReactNativeBlobUtil;
+
+      // 1️⃣ Check if already downloaded
+      const exists = await fs.exists(publicPath);
+
+      // 2️⃣ If not, silently download to Downloads
+      if (!exists) {
+        const pdfUrl = `${api.defaults.baseURL}/api/bills/${transaction._id}/pdf`;
+
+        const res = await ReactNativeBlobUtil.fetch("GET", pdfUrl);
+        await fs.writeFile(publicPath, res.base64(), "base64");
+      }
+
+      // 3️⃣ Copy to cache for sharing
+      await fs.cp(publicPath, cachePath);
+
+      // 4️⃣ Share
+      await Share.open({
+        url: `file://${cachePath}`,
+        type: "application/pdf",
+        failOnCancel: false,
+      });
+
+    } catch (e) {
+      console.error(e);
+      Alert.alert("Error", "Unable to share invoice");
+    } finally {
+      // 5️⃣ Cleanup cache copy
+      try {
+        const { fs } = ReactNativeBlobUtil;
+        const cacheExists = await fs.exists(cachePath);
+        if (cacheExists) {
+          await fs.unlink(cachePath);
+        }
+      } catch (_) {
+        // ignore cleanup errors
+      }
+    }
   };
 
   // FIXED: Calculate totals for new structure with multiple customers
